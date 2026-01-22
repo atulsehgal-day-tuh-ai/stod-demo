@@ -1,41 +1,32 @@
-# STOD Demo Application
+# STOD Demo (Same Thing Only Different Repository)
 
-A modern web application for managing Standard Operating Procedures and Principles (STOD) with role-based access control.
+A modern **Next.js** demo app for browsing, contributing, and curating “Same Thing Only Different” principles with a lightweight **role-based experience**, **tools**, and a **credits** economy.
 
-## Features
+## Live deployment
 
-- **User Authentication**: Login system with multiple user roles
-- **Role-Based Access Control**: 
-  - **Administrator**: Full access including user management
-  - **Manager**: Can edit and delete principles
-  - **Editor**: Can create and edit principles
-  - **Viewer**: Read-only access
-- **Principles Repository**: Create, view, edit, and delete STOD principles
-- **User Management**: Administrators can manage users and their roles
-- **Search Functionality**: Search principles by title, description, or category
-- **Modern UI**: Built with Next.js, React, and Tailwind CSS
+- **Production (Vercel)**: `https://stod-demo.vercel.app/`
 
-## Getting Started
+## What’s in the app
 
-### Prerequisites
+- **Principles repository**
+  - Search, filter, sort, and read principles
+  - “In Process” workflow stages for submissions and curator review
+- **Roles & permissions (demo)**
+  - **Looker**: browse/read (limited free previews; unlock more principles with credits)
+  - **Member**: save principles + better session pricing
+  - **Practitioner**: forums + deeper prompts/tools + stronger session discounts
+  - **Contributor**: submit principles + Advanced Reader usage + high session discounts
+  - **Moderator**: review/curate submissions and annotations + best session pricing (often free in demo)
+  - **Admin**: full access including user management
+- **Tools & learning**
+  - **Tools Hub** (subscription gated in demo) including **Advanced Reader**
+  - **Videos** and **Sessions** with role-based pricing/discounts
+- **Annotations workflow (demo)**
+  - Users submit annotations (stored in localStorage) as **Pending Review**
+  - Moderators/Admins can approve/reject from **Review → Annotations**
+  - Approved annotations appear inside **Advanced Reader**
 
-- Node.js 18+ and npm/yarn
-
-### Installation
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Run the development server:
-```bash
-npm run dev
-```
-
-3. Open [http://localhost:3000](http://localhost:3000) in your browser
-
-## Demo Credentials
+## Demo credentials
 
 - **Admin**: `admin` / `admin123`
 - **Moderator**: `moderator` / `moderator123`
@@ -44,34 +35,62 @@ npm run dev
 - **Member**: `member` / `member123`
 - **Looker**: `looker` / `looker123`
 
-## Project Structure
+## Local development
 
-```
-├── app/
-│   ├── layout.tsx          # Root layout
-│   ├── page.tsx            # Main page
-│   └── globals.css         # Global styles
-├── components/
-│   ├── Dashboard.tsx       # Main dashboard
-│   ├── LoginForm.tsx       # Login component
-│   ├── PrincipleCard.tsx   # Principle card component
-│   ├── PrincipleModal.tsx  # Principle form modal
-│   └── UserManagement.tsx  # User management interface
-└── ref docs/               # Reference documentation
+### Prerequisites
+
+- Node.js **18+**
+- npm
+
+### Run
+
+```bash
+npm install
+npm run dev
 ```
 
-## Technologies Used
+Open `http://localhost:3000`.
 
-- **Next.js 14**: React framework
-- **TypeScript**: Type safety
-- **Tailwind CSS**: Styling
-- **React Icons**: Icon library
+If port 3000 is busy, run on 3003:
 
-## Data Storage
+```bash
+npm run dev:3003
+```
 
-The application uses browser localStorage for data persistence. In a production environment, this would be replaced with a proper backend database.
+Open `http://localhost:3003`.
+
+### Troubleshooting
+
+- If you hit a corrupted build cache error (e.g. “Cannot find module './480.js'”), see `LOCAL_RUN.md` for the recommended `.next` cleanup steps.
+
+## Deployment (Vercel)
+
+This project is designed to deploy cleanly to Vercel (Next.js auto-detected). For detailed steps see:
+
+- `QUICK_DEPLOY.md` (fast path)
+- `DEPLOYMENT.md` (expanded guide + alternatives)
+
+To deploy “on top of” the existing Vercel app (`stod-demo.vercel.app`), push your changes to the git branch connected to the Vercel project (typically `main`). Vercel will automatically build and promote a new production deployment.
+
+## Data/storage model (important)
+
+This is a **demo** and uses browser **localStorage** for persistence (principles, annotations, subscriptions, etc.). That means:
+
+- Data is per-browser and not shared across users/devices
+- Clearing browser data resets state
+
+In a production system this would be replaced with real authentication and a backend database/API.
+
+## Repo structure (high-level)
+
+```
+app/                 # Next.js app router entry
+components/          # UI + feature components (Dashboard, Reader, Review, Tools, etc.)
+public/              # Static assets
+types/               # TypeScript type shims
+```
 
 ## License
 
-This is a demo application for demonstration purposes.
+Demo application for demonstration purposes.
 
