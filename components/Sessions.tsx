@@ -16,22 +16,22 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth())
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
-  // Role-based pricing (STOD credits required)
+  // Role-based pricing (credits required)
   const getSessionPrice = (basePrice: number) => {
     if (!user || !user.role) return basePrice
-    if (user.role === 'Curator' || user.role === 'Admin') {
-      return 0 // Free for Curators and Admins
+    if (user.role === 'Moderator' || user.role === 'Admin') {
+      return 0 // Free for Moderators and Admins
     }
-    if (user.role === 'Architect') {
+    if (user.role === 'Contributor') {
       return Math.floor(basePrice * 0.3) // 30% of base price
     }
     if (user.role === 'Practitioner') {
       return Math.floor(basePrice * 0.5) // 50% of base price
     }
-    if (user.role === 'Learner') {
+    if (user.role === 'Member') {
       return Math.floor(basePrice * 0.7) // 70% of base price
     }
-    if (user.role === 'Seeker') {
+    if (user.role === 'Looker') {
       return basePrice // 100% - pays the most
     }
     return basePrice
@@ -52,7 +52,7 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
           date: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
           duration: 90, // minutes
           totalSeats: 20,
-          basePrice: 500, // STOD credits
+          basePrice: 500, // credits
           bookedSeats: [],
           status: 'Open',
         },
@@ -173,12 +173,12 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
 
     // Check if user has enough credits (unless free)
     if (price > 0 && ((user.credits || 0) < price)) {
-      alert(`Insufficient credits! You need ${price} STOD credits but only have ${user.credits || 0}.`)
+      alert(`Insufficient credits! You need ${price} credits but only have ${user.credits || 0}.`)
       return
     }
 
     // Confirm booking
-    if (!confirm(`Book this session for ${price === 0 ? 'FREE' : `${price} STOD credits`}?`)) {
+    if (!confirm(`Book this session for ${price === 0 ? 'FREE' : `${price} credits`}?`)) {
       return
     }
 
@@ -231,7 +231,7 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
       }
     }
 
-    alert(`Successfully booked! ${price > 0 ? `${price} STOD credits deducted.` : 'Free for your role!'}`)
+    alert(`Successfully booked! ${price > 0 ? `${price} credits deducted.` : 'Free for your role!'}`)
     setSelectedSession(null)
   }
 
@@ -298,10 +298,10 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
 
   const getRoleDiscount = () => {
     if (!user || !user.role) return 'Loading...'
-    if (user.role === 'Curator' || user.role === 'Admin') return 'FREE'
-    if (user.role === 'Architect') return '70% OFF'
+    if (user.role === 'Moderator' || user.role === 'Admin') return 'FREE'
+    if (user.role === 'Contributor') return '70% OFF'
     if (user.role === 'Practitioner') return '50% OFF'
-    if (user.role === 'Learner') return '30% OFF'
+    if (user.role === 'Member') return '30% OFF'
     return 'Full Price'
   }
 
@@ -501,7 +501,7 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
                         <div className="flex items-center gap-2">
                           <FiDollarSign className={price === 0 ? 'text-green-600' : 'text-primary-600'} />
                           <span className={`font-bold ${price === 0 ? 'text-green-600' : 'text-gray-900'}`}>
-                            {price === 0 ? 'FREE' : `${price} STOD Credits`}
+                            {price === 0 ? 'FREE' : `${price} Credits`}
                           </span>
                           {price < session.basePrice && (
                             <span className="text-xs text-gray-500 line-through">
@@ -627,7 +627,7 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
                 <span className="font-bold">
                   {getSessionPrice(selectedSession.basePrice) === 0 
                     ? 'FREE' 
-                    : `${getSessionPrice(selectedSession.basePrice)} STOD Credits`}
+                    : `${getSessionPrice(selectedSession.basePrice)} Credits`}
                 </span>
               </div>
             </div>

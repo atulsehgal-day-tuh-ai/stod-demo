@@ -1,17 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { FiUser, FiLock, FiLogIn, FiStar, FiHome } from 'react-icons/fi'
+import { FiUser, FiLock, FiLogIn, FiStar, FiHome, FiChevronDown, FiChevronUp } from 'react-icons/fi'
 
 interface LoginFormProps {
   onLogin: (user: any) => void
   onGoHome?: () => void
+  onGoSignUp?: () => void
 }
 
-export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
+export default function LoginForm({ onLogin, onGoHome, onGoSignUp }: LoginFormProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [showRoles, setShowRoles] = useState(false)
 
   const demoUsers = [
     { 
@@ -28,10 +30,10 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
     },
     { 
       id: 2, 
-      username: 'curator', 
-      password: 'curator123', 
-      role: 'Curator', 
-      name: 'Sarah Curator',
+      username: 'moderator', 
+      password: 'moderator123', 
+      role: 'Moderator', 
+      name: 'Sarah Moderator',
       email: 'curator@stod.com',
       credits: 5000,
       walletStatus: 'Stakeholder',
@@ -40,10 +42,10 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
     },
     { 
       id: 3, 
-      username: 'architect', 
-      password: 'architect123', 
-      role: 'Architect', 
-      name: 'Alex Architect',
+      username: 'contributor', 
+      password: 'contributor123', 
+      role: 'Contributor', 
+      name: 'Alex Contributor',
       email: 'architect@stod.com',
       credits: 2500,
       walletStatus: 'Accumulator',
@@ -65,10 +67,10 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
     },
     { 
       id: 5, 
-      username: 'learner', 
-      password: 'learner123', 
-      role: 'Learner', 
-      name: 'Morgan Learner',
+      username: 'member', 
+      password: 'member123', 
+      role: 'Member', 
+      name: 'Morgan Member',
       email: 'learner@stod.com',
       credits: 100,
       walletStatus: 'Rechargeable',
@@ -77,10 +79,10 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
     },
     { 
       id: 6, 
-      username: 'seeker', 
-      password: 'seeker123', 
-      role: 'Seeker', 
-      name: 'Taylor Seeker',
+      username: 'looker', 
+      password: 'looker123', 
+      role: 'Looker', 
+      name: 'Taylor Looker',
       email: 'seeker@stod.com',
       phone: '123-456-7890',
       credits: 50,
@@ -109,43 +111,22 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
   const getRoleColor = (role: string) => {
     const colors: Record<string, string> = {
       'Admin': 'from-purple-500 to-purple-700',
-      'Curator': 'from-blue-500 to-blue-700',
-      'Architect': 'from-green-500 to-green-700',
+      'Moderator': 'from-blue-500 to-blue-700',
+      'Contributor': 'from-green-500 to-green-700',
       'Practitioner': 'from-orange-500 to-orange-700',
-      'Learner': 'from-cyan-500 to-cyan-700',
-      'Seeker': 'from-gray-400 to-gray-600',
+      'Member': 'from-cyan-500 to-cyan-700',
+      'Looker': 'from-gray-400 to-gray-600',
     }
     return colors[role] || 'from-gray-400 to-gray-600'
   }
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url(/tree.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
-      }}
-    >
-      {/* Subtle dark overlay for text readability */}
-      <div className="absolute inset-0 bg-black/15"></div>
-
-      <div 
-        className="max-w-md w-full rounded-2xl shadow-2xl p-8 relative z-10 border border-white/40"
-        style={{
-          background: 'rgba(255, 255, 255, 0.25)',
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37), inset 0 1px 1px 0 rgba(255, 255, 255, 0.5)',
-        }}
-      >
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50 to-purple-50 flex items-center justify-center px-4">
+      <div className="max-w-xl w-full rounded-2xl shadow-xl p-8 relative border border-white/60 bg-white/85 backdrop-blur-md">
         {onGoHome && (
           <button
             onClick={onGoHome}
-            className="absolute top-4 left-4 flex items-center gap-2 text-white/90 hover:text-white transition-colors drop-shadow-md"
-            style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.4)' }}
+            className="absolute top-4 left-4 flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors"
           >
             <FiHome className="text-lg" />
             <span className="text-sm font-medium">Home</span>
@@ -155,89 +136,111 @@ export default function LoginForm({ onLogin, onGoHome }: LoginFormProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl mb-4 shadow-lg transform hover:scale-110 transition-transform">
             <FiStar className="text-white text-2xl" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg" style={{ textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)' }}>
-            STOD Repository
+          <h1 className="text-gray-900 mb-2">
+            <span className="block text-3xl sm:text-4xl font-bold italic whitespace-nowrap">
+              Same Thing Only Different
+            </span>
+            <span className="block text-2xl font-bold text-gray-600">
+              Community
+            </span>
           </h1>
-          <p className="text-white font-medium italic text-lg mb-1 drop-shadow-md" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.4)' }}>
-            Same Thing Only Different
-          </p>
-          <p className="text-xs text-white/90 drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.3)' }}>
-            Universal Truths • Pattern Recognition • Real-World Application
+          <p className="text-xs text-gray-600">
+            Principles • Pattern Recognition • Real-World Application
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-semibold text-white mb-2 drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.4)' }}>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Username
             </label>
             <div className="relative">
-              <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/90 z-10 drop-shadow-sm" />
+              <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-white/40 backdrop-blur-sm border-2 border-white/50 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/70 focus:bg-white/60 transition-all text-white placeholder:text-white/60"
+                className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-gray-900 placeholder:text-gray-400 shadow-sm"
                 placeholder="Enter username"
                 required
-                style={{ textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-white mb-2 drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.4)' }}>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Password
             </label>
             <div className="relative">
-              <FiLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/90 z-10 drop-shadow-sm" />
+              <FiLock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-white/40 backdrop-blur-sm border-2 border-white/50 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/70 focus:bg-white/60 transition-all text-white placeholder:text-white/60"
+                className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-gray-900 placeholder:text-gray-400 shadow-sm"
                 placeholder="Enter password"
                 required
-                style={{ textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)' }}
               />
             </div>
           </div>
 
           {error && (
-            <div className="bg-red-500/40 backdrop-blur-sm border-2 border-red-400/60 text-white px-4 py-3 rounded-xl animate-shake drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.5)' }}>
+            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-xl animate-shake">
               {error}
             </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-primary-600/90 to-primary-700/90 hover:from-primary-700 hover:to-primary-800 backdrop-blur-sm text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02] border border-white/30"
-            style={{
-              boxShadow: '0 4px 15px 0 rgba(79, 70, 229, 0.4), inset 0 1px 1px 0 rgba(255, 255, 255, 0.3)',
-            }}
+            className="w-full bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
           >
             <FiLogIn />
             Sign In
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-white/30">
-          <p className="text-sm font-semibold text-white text-center mb-4 drop-shadow-md" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.4)' }}>
-            🎭 Try Different Roles
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {demoUsers.map((user) => (
-              <div
-                key={user.id}
-                className={`p-2 rounded-lg bg-gradient-to-r ${getRoleColor(user.role)} text-white text-center font-medium cursor-pointer hover:scale-105 transition-transform`}
-                onClick={() => {
-                  setUsername(user.username)
-                  setPassword(user.password)
-                }}
-              >
-                {user.role}
-              </div>
-            ))}
+        {onGoSignUp && (
+          <div className="pt-4 text-center">
+            <button
+              type="button"
+              onClick={onGoSignUp}
+              className="text-primary-700 hover:text-primary-900 font-semibold underline underline-offset-4"
+            >
+              New here? Create an account
+            </button>
+          </div>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={() => setShowRoles((v) => !v)}
+            className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-700 text-center"
+            aria-expanded={showRoles}
+            aria-controls="demo-roles"
+          >
+            <span>🎭 Try Different Roles</span>
+            {showRoles ? <FiChevronUp /> : <FiChevronDown />}
+          </button>
+
+          <div
+            id="demo-roles"
+            className={`transition-all duration-300 overflow-hidden ${showRoles ? 'max-h-96 opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}`}
+          >
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {demoUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className={`p-2 rounded-lg bg-gradient-to-r ${getRoleColor(user.role)} text-white text-center font-medium cursor-pointer hover:scale-105 transition-transform`}
+                  onClick={() => {
+                    setUsername(user.username)
+                    setPassword(user.password)
+                  }}
+                >
+                  {user.role}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

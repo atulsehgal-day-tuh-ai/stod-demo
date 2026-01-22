@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { FiLogOut, FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiUser, FiBook, FiSave, FiUsers, FiMessageSquare, FiHelpCircle, FiUpload, FiCheckCircle, FiStar, FiZap, FiPlay, FiCalendar } from 'react-icons/fi'
 import PrincipleCard from './PrincipleCard'
 import PrincipleModal from './PrincipleModal'
+import PrincipleReaderModal from './PrincipleReaderModal'
 import UserManagement from './UserManagement'
 import CreditsWallet from './CreditsWallet'
 import PrincipleSubmission from './PrincipleSubmission'
@@ -11,187 +12,420 @@ import CuratorReview from './CuratorReview'
 import Forums from './Forums'
 import SavedPrinciples from './SavedPrinciples'
 import DissonanceMatrix from './DissonanceMatrix'
+import ToolsHub, { type ToolKey } from './ToolsHub'
+import PrincipleMap from './PrincipleMap'
+import AdvancedReader from './AdvancedReader'
 import Videos from './Videos'
 import Sessions from './Sessions'
 
 interface DashboardProps {
   user: any
   onLogout: () => void
+  onUpdateUser?: (nextUser: any) => void
 }
 
-export default function Dashboard({ user, onLogout }: DashboardProps) {
+type ToolsSubscriptionPlan = 'monthly' | 'annual'
+type ToolsSubscription = {
+  plan: ToolsSubscriptionPlan
+  startedAt: string
+  expiresAt: string
+}
+
+const PRINCIPLE_UNLOCKS_LS_KEY = 'stod_principle_unlocks_by_user'
+const LOOKER_FREE_PREVIEW_COUNT = 2
+const LOOKER_PRINCIPLE_UNLOCK_PRICE = 25
+
+const TOOLS_SUBSCRIPTION_LS_KEY = 'stod_tools_subscription_by_user'
+const TOOLS_PRICING: Record<ToolsSubscriptionPlan, { label: string; credits: number; days: number }> = {
+  monthly: { label: 'Monthly', credits: 250, days: 30 },
+  annual: { label: 'Annual', credits: 2500, days: 365 },
+}
+
+function addDays(base: number, days: number) {
+  return new Date(base + days * 24 * 60 * 60 * 1000).toISOString()
+}
+
+function loadToolsSubscription(userId: any): ToolsSubscription | null {
+  if (!userId) return null
+  try {
+    const raw = localStorage.getItem(TOOLS_SUBSCRIPTION_LS_KEY)
+    const map = raw ? JSON.parse(raw) : {}
+    const sub = map[String(userId)]
+    if (!sub || !sub.expiresAt) return null
+    return sub as ToolsSubscription
+  } catch {
+    return null
+  }
+}
+
+function saveToolsSubscription(userId: any, sub: ToolsSubscription | null) {
+  if (!userId) return
+  try {
+    const raw = localStorage.getItem(TOOLS_SUBSCRIPTION_LS_KEY)
+    const map = raw ? JSON.parse(raw) : {}
+    if (sub) map[String(userId)] = sub
+    else delete map[String(userId)]
+    localStorage.setItem(TOOLS_SUBSCRIPTION_LS_KEY, JSON.stringify(map))
+  } catch {
+    // ignore
+  }
+}
+
+function isSubscriptionActive(sub: ToolsSubscription | null) {
+  if (!sub?.expiresAt) return false
+  const ts = Date.parse(sub.expiresAt)
+  return Number.isFinite(ts) && ts > Date.now()
+}
+
+export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardProps) {
+  const STOD_PRINCIPLES_SEED_VERSION = 'stod-v24-2026-01-22-fulltext-1'
+  const AUTHOR_NAME_MAP: Record<string, string> = {
+    // Current seed labels
+    'Alex Contributor': 'Alex Rivera',
+    'Sarah Moderator': 'Sarah Chen',
+
+    // Legacy labels (older seed data)
+    'Alex Architect': 'Alex Rivera',
+    'Sarah Curator': 'Sarah Chen',
+
+    // Older demo-era generic names that may exist in localStorage data
+    'Admin User': 'Gary Kennedy',
+    'Manager User': 'Jordan Patel',
+    'Editor User': 'Morgan Lee',
+    'Viewer User': 'Taylor Kim',
+    'System Admin': 'Gary Kennedy',
+  }
+
   const [principles, setPrinciples] = useState<any[]>([])
   const [filteredPrinciples, setFilteredPrinciples] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortBy, setSortBy] = useState<'relevance' | 'recency' | 'popularity' | 'title'>('relevance')
+  const [authorFilter, setAuthorFilter] = useState<string>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [featuredOnly, setFeaturedOnly] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingPrinciple, setEditingPrinciple] = useState<any>(null)
+  const [readingPrinciple, setReadingPrinciple] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'principles' | 'users' | 'submissions' | 'review' | 'forums' | 'saved' | 'matrix' | 'videos' | 'sessions'>('principles')
   const [showCreditsModal, setShowCreditsModal] = useState(false)
+  const [activeTool, setActiveTool] = useState<ToolKey | null>(null)
+  const [advancedReaderPrincipleId, setAdvancedReaderPrincipleId] = useState<number | null>(null)
+  const [toolsSubscription, setToolsSubscription] = useState<ToolsSubscription | null>(null)
+  const [pendingTool, setPendingTool] = useState<ToolKey | null>(null)
+  const [unlockedPrincipleIds, setUnlockedPrincipleIds] = useState<number[]>([])
 
   // Role-based permissions
-  const isSeeker = user?.role === 'Seeker'
-  const isLearner = user?.role === 'Learner'
+  const isLooker = user?.role === 'Looker'
+  const isMember = user?.role === 'Member'
   const isPractitioner = user?.role === 'Practitioner'
-  const isArchitect = user?.role === 'Architect'
-  const isCurator = user?.role === 'Curator'
+  const isContributor = user?.role === 'Contributor'
+  const isModerator = user?.role === 'Moderator'
   const isAdmin = user?.role === 'Admin'
 
   const canView = true
-  const canSave = ['Learner', 'Practitioner', 'Architect', 'Curator', 'Admin'].includes(user?.role || '')
-  const canCreate = ['Architect', 'Curator', 'Admin'].includes(user?.role || '')
-  const canEdit = ['Curator', 'Admin'].includes(user?.role || '')
+  const canSave = ['Member', 'Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canCreate = ['Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canEdit = ['Moderator', 'Admin'].includes(user?.role || '')
   const canDelete = user?.role === 'Admin'
-  const canCurate = ['Curator', 'Admin'].includes(user?.role || '')
+  const canCurate = ['Moderator', 'Admin'].includes(user?.role || '')
   const canManageUsers = user?.role === 'Admin'
-  const canAccessForums = ['Practitioner', 'Architect', 'Curator', 'Admin'].includes(user?.role || '')
-  const canSubmitPrinciples = ['Architect', 'Curator', 'Admin'].includes(user?.role || '')
-  const canAccessMatrix = ['Practitioner', 'Architect', 'Curator', 'Admin'].includes(user?.role || '')
-  const canAccessVideos = ['Practitioner', 'Architect', 'Curator', 'Admin'].includes(user?.role || '')
+  const canAccessForums = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canSubmitPrinciples = ['Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canAccessMatrix = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canAccessVideos = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+
+  const toolsSubscribed = isSubscriptionActive(toolsSubscription)
+
+  useEffect(() => {
+    if (!user?.id) return
+    setToolsSubscription(loadToolsSubscription(user.id))
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id) return
+    try {
+      const raw = localStorage.getItem(PRINCIPLE_UNLOCKS_LS_KEY)
+      const map = raw ? JSON.parse(raw) : {}
+      const ids = Array.isArray(map[String(user.id)]) ? map[String(user.id)] : []
+      setUnlockedPrincipleIds(ids.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n)))
+    } catch {
+      setUnlockedPrincipleIds([])
+    }
+  }, [user?.id])
+
+  const lookerFreeIds = useMemo(() => {
+    const ids = principles
+      .slice()
+      .sort((a, b) => Number(a.id) - Number(b.id))
+      .slice(0, LOOKER_FREE_PREVIEW_COUNT)
+      .map((p) => Number(p.id))
+      .filter((n) => Number.isFinite(n))
+    return new Set(ids)
+  }, [principles])
+
+  const isPrincipleUnlocked = (p: any) => {
+    const id = Number(p?.id)
+    if (!Number.isFinite(id)) return true
+    if (user?.role !== 'Looker') return true
+    if (lookerFreeIds.has(id)) return true
+    return unlockedPrincipleIds.includes(id)
+  }
+
+  const saveUnlockedPrinciples = (ids: number[]) => {
+    if (!user?.id) return
+    try {
+      const raw = localStorage.getItem(PRINCIPLE_UNLOCKS_LS_KEY)
+      const map = raw ? JSON.parse(raw) : {}
+      map[String(user.id)] = ids
+      localStorage.setItem(PRINCIPLE_UNLOCKS_LS_KEY, JSON.stringify(map))
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('stod_principles')
+    const storedSeedVersion = localStorage.getItem('stod_principles_seed_version')
+
+    const seedData = [
+      {
+        id: 1,
+        title: 'Same Thing Only Different',
+        category: 'Pattern Recognition',
+        description:
+          'To achieve different (better) results, keep what works and change what doesn’t—iterating, measuring, and adjusting. This protects past learning while enabling improvement.',
+        fullText:
+          'The logic train I followed to arrive at the “same thing only different” goes as follows.\n\n' +
+          'In order to achieve different results it is requisite to do things differently. When you do things differently you will either achieve better results or lesser results.\n\n' +
+          'Are you willing to take the risk of achieving lesser results in order to have an opportunity to achieve better results?\n\n' +
+          'Do you see that making wholesale changes—i.e., change everything—fails to take advantage of the learning of the past?\n\n' +
+          'Can you see that the only way to effect changes that lead to better results is by doing the “same thing only different?” In other words, continue the things that have worked well while you change, measure, adjust, and change again until you have delivered definitively different (better) results.\n\n' +
+          'Determine what has worked well and continue that while changing some things so you can achieve different (better) results.',
+        status: 'Core Principles',
+        version: '24.0',
+        createdBy: 'Gary Kennedy',
+        createdById: 2,
+        curatorName: 'Sarah Chen',
+        curatorId: 2,
+        featured: true,
+        mostLiked: true,
+        likes: 89,
+        hardQuestions: [
+          'What has worked well before that you should keep?',
+          'What is “only different” this time—and how will you measure it?',
+          'What small change would produce a definitively better outcome?',
+        ],
+        takeHomeValue: 'Keep the effective parts, change one variable, measure, adjust, repeat.',
+        savedBy: [5, 4, 3, 2],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 2,
+        title: 'Pay Attention',
+        category: 'Observation',
+        description:
+          'The obvious is often invisible until you slow down and notice. Consistent attention beats occasional brilliance.',
+        status: 'Core Principles',
+        version: '24.0',
+        createdBy: 'Gary Kennedy',
+        createdById: 2,
+        curatorName: 'Sarah Chen',
+        curatorId: 2,
+        featured: true,
+        likes: 67,
+        hardQuestions: [
+          'What is right in front of you that you’re ignoring?',
+          'What pattern is repeating that you haven’t named yet?',
+          'What would you notice if you watched the system—not the story?',
+        ],
+        takeHomeValue: 'Stop. Look. Listen. The answer is often already present.',
+        savedBy: [5, 4],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 3,
+        title: 'Context Matters (Context is King)',
+        category: 'Decision Making',
+        description:
+          'Before you act, understand the “why” and the environment. The same action can be correct or catastrophic depending on context.',
+        fullText:
+          'A very important principle is context matters—or “Context is king.”\n\n' +
+          'When you evaluate an idea, a choice, or a claim, the surrounding context changes what it means and whether it is wise.\n\n' +
+          'Consider the source. Context is king. Provenance matters.',
+        status: 'Core Principles',
+        version: '24.0',
+        createdBy: 'Gary Kennedy',
+        createdById: 2,
+        curatorName: 'Sarah Chen',
+        curatorId: 2,
+        featured: true,
+        likes: 54,
+        hardQuestions: [
+          'What problem are we actually solving (not just reacting to)?',
+          'What context would change the “right” answer?',
+          'What’s missing from the picture that would reverse your decision?',
+        ],
+        takeHomeValue: 'Get context first; execution without context creates expensive mistakes.',
+        savedBy: [5],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 4,
+        title: 'Build What You Can Sell',
+        category: 'Entrepreneurship',
+        description:
+          'Choose the right filter. Instead of “sell what we can build,” prefer “build what we can sell.” Let demand guide decisions.',
+        status: 'Core Principles',
+        version: '24.0',
+        createdBy: 'Jordan Patel',
+        createdById: 4,
+        curatorName: 'Sarah Chen',
+        curatorId: 2,
+        featured: true,
+        likes: 61,
+        hardQuestions: [
+          'What filter are you using to choose features or products?',
+          'Are you building for capability or for demand?',
+          'What would customers pay for if you had to prove it this week?',
+        ],
+        takeHomeValue: 'Use a customer filter early; it prevents capability-first mistakes.',
+        savedBy: [4, 3],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 5,
+        title: 'Fix It, Then Decentralize',
+        category: 'Leadership',
+        description:
+          'You can’t fix a broken organization by decentralizing it. Stabilize the core first, then distribute decision-making.',
+        status: 'In Process',
+        workflowStage: 'Under Review',
+        currentAssignee: 'Sarah Chen',
+        version: '24.0',
+        createdBy: 'Gary Kennedy',
+        createdById: 2,
+        curatorId: 2,
+        curatorName: 'Sarah Chen',
+        likes: 47,
+        hardQuestions: [
+          'What’s broken that must be fixed before autonomy works?',
+          'Where does decentralization increase chaos today?',
+          'What is the minimum stable process before you delegate?',
+        ],
+        takeHomeValue: 'Stability precedes autonomy. Fix first, then decentralize.',
+        savedBy: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: 6,
+        title: 'Think “Manage”, Not “Solve”',
+        category: 'Strategy',
+        description:
+          'Complex problems often can’t be “solved” once and for all. Manage with scenarios, feedback loops, and a guiding playbook of principles.',
+        status: 'Core Principles',
+        version: '24.0',
+        createdBy: 'Morgan Lee',
+        createdById: 5,
+        curatorName: 'Sarah Chen',
+        curatorId: 2,
+        featured: false,
+        likes: 38,
+        hardQuestions: [
+          'What would “managing” this look like vs “solving” it?',
+          'What feedback loops will tell you early if you’re wrong?',
+          'What principle will guide decisions when the plan changes?',
+        ],
+        takeHomeValue: 'Use principles as a playbook and adapt as new information appears.',
+        savedBy: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]
+
     if (stored) {
-      const data = JSON.parse(stored)
-      setPrinciples(data)
-      setFilteredPrinciples(data)
-    } else {
-      const sampleData = [
-        {
-          id: 1,
-          title: 'Same Thing Only Different - Pattern Recognition',
-          category: 'Universal Truth',
-          description: 'Everything is connected. When you see a new problem, recognize it as "I\'ve seen this before" - same thing, only different. The pattern is universal, the context changes. This principle applies across domains: business, relationships, technology, life itself.',
-          status: 'Core Principles',
-          version: '3.0',
-          createdBy: 'Alex Architect',
-          createdById: 3,
-          curatorName: 'Sarah Curator',
-          curatorId: 2,
-          featured: true,
-          mostLiked: true,
-          likes: 89,
-          hardQuestions: [
-            'What patterns have you seen before that apply to your current challenge?',
-            'How is this situation "the same thing only different" from something you\'ve experienced?',
-            'What universal truth underlies this problem that you can recognize from other domains?'
-          ],
-          takeHomeValue: 'Recognize patterns. Connect the dots. See the familiar in the unfamiliar. Every problem is a variation of something you\'ve seen before.',
-          savedBy: [5, 4, 3, 2],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          title: 'Pay Attention - The Power of Observation',
-          category: 'Wisdom',
-          description: 'Most people miss the obvious because they\'re not paying attention. The best insights come from simply observing what\'s right in front of you. Notice what others miss. See the details. The answer is often staring you in the face.',
-          status: 'Core Principles',
-          version: '2.5',
-          createdBy: 'Alex Architect',
-          createdById: 3,
-          curatorName: 'Sarah Curator',
-          curatorId: 2,
-          featured: true,
-          likes: 67,
-          hardQuestions: [
-            'What are you not seeing that\'s right in front of you?',
-            'What details are others missing that you can observe?',
-            'How can you train yourself to pay better attention to what matters?'
-          ],
-          takeHomeValue: 'Stop. Look. Listen. The answer is usually right there when you pay attention.',
-          savedBy: [5, 4],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 3,
-          title: 'Context Matters - The Why Behind Everything',
-          category: 'Problem Solving',
-          description: 'Understanding context is everything. The "why" matters more than the "what". Before you act, understand the full picture. Why is this happening? What\'s the real problem? What are you really trying to solve? Context prevents mistakes and reveals solutions.',
-          status: 'Core Principles',
-          version: '2.0',
-          createdBy: 'Alex Architect',
-          createdById: 3,
-          curatorName: 'Sarah Curator',
-          curatorId: 2,
-          featured: true,
-          likes: 54,
-          hardQuestions: [
-            'What is the real problem you\'re trying to solve?',
-            'Why is this happening? What\'s the context you\'re missing?',
-            'What would happen if you understood the full picture before acting?'
-          ],
-          takeHomeValue: 'Always ask why. Context matters more than content. Understand before you act.',
-          savedBy: [5],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 4,
-          title: 'Apply to Real Life - Hard Questions That Matter',
-          category: 'Application',
-          description: 'Principles are useless unless you apply them. Ask the hard questions. Make it real. What does this mean for YOUR situation? How does this change YOUR behavior? Connect every principle back to something you can actually use today.',
-          status: 'Core Principles',
-          version: '1.8',
-          createdBy: 'Alex Architect',
-          createdById: 3,
-          curatorName: 'Sarah Curator',
-          curatorId: 2,
-          likes: 43,
-          hardQuestions: [
-            'How does this principle apply to your actual life right now?',
-            'What will you do differently because of this insight?',
-            'What\'s the one thing you can apply today that will make a difference?'
-          ],
-          takeHomeValue: 'Make it real. Apply it today. Connect principles to practice. Hard questions lead to real change.',
-          savedBy: [4, 3],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        {
-          id: 5,
-          title: 'Learn from Experience - The Cost of Mistakes',
-          category: 'Wisdom',
-          description: 'Mistakes are expensive teachers, but they\'re the best ones. Learn from your experience. Learn from others\' experience. Don\'t repeat what doesn\'t work. Recognize patterns of failure. The cost of not learning is doing it wrong again.',
-          status: 'In Process',
-          workflowStage: 'Under Review',
-          currentAssignee: 'Sarah Curator',
-          version: '1.2',
-          createdBy: 'Alex Architect',
-          createdById: 3,
-          curatorId: 2,
-          curatorName: 'Sarah Curator',
-          likes: 31,
-          hardQuestions: [
-            'What mistakes have you made that you keep repeating?',
-            'What patterns of failure can you recognize and avoid?',
-            'How can you learn from others\' expensive mistakes instead of making your own?'
-          ],
-          takeHomeValue: 'Learn from mistakes. Recognize failure patterns. Don\'t pay the same price twice.',
-          savedBy: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
-      setPrinciples(sampleData)
-      setFilteredPrinciples(sampleData)
-      localStorage.setItem('stod_principles', JSON.stringify(sampleData))
+      // Only keep previously stored principles if they were seeded by the current STOD v24 seed.
+      if (storedSeedVersion === STOD_PRINCIPLES_SEED_VERSION) {
+        const data = JSON.parse(stored)
+        const migrated = (Array.isArray(data) ? data : []).map((p: any) => ({
+          ...p,
+          createdBy: AUTHOR_NAME_MAP[String(p?.createdBy || '').trim()] || p?.createdBy,
+          curatorName: AUTHOR_NAME_MAP[String(p?.curatorName || '').trim()] || p?.curatorName,
+          currentAssignee: AUTHOR_NAME_MAP[String(p?.currentAssignee || '').trim()] || p?.currentAssignee,
+        }))
+        setPrinciples(migrated)
+        setFilteredPrinciples(migrated)
+        localStorage.setItem('stod_principles', JSON.stringify(migrated))
+        return
+      }
     }
+
+    // Seed / reset to STOD v24 principles
+    setPrinciples(seedData)
+    setFilteredPrinciples(seedData)
+    localStorage.setItem('stod_principles', JSON.stringify(seedData))
+    localStorage.setItem('stod_principles_seed_version', STOD_PRINCIPLES_SEED_VERSION)
   }, [])
 
+  const authorOptions = useMemo(() => {
+    const authors = Array.from(new Set(principles.map((p) => p.createdBy).filter(Boolean)))
+    authors.sort((a, b) => String(a).localeCompare(String(b)))
+    return authors
+  }, [principles])
+
+  const categoryOptions = useMemo(() => {
+    const cats = Array.from(new Set(principles.map((p) => p.category).filter(Boolean)))
+    cats.sort((a, b) => String(a).localeCompare(String(b)))
+    return cats
+  }, [principles])
+
   useEffect(() => {
-    if (searchTerm) {
-      const filtered = principles.filter(
-        (p) =>
-          p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          p.category.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      setFilteredPrinciples(filtered)
-    } else {
-      setFilteredPrinciples(principles)
+    const q = searchTerm.trim().toLowerCase()
+
+    const getDate = (p: any) => {
+      const dt = p.updatedAt || p.createdAt
+      const ts = dt ? Date.parse(dt) : 0
+      return Number.isFinite(ts) ? ts : 0
     }
-  }, [searchTerm, principles])
+
+    const score = (p: any) => {
+      if (!q) return 0
+      const title = String(p.title || '').toLowerCase()
+      const desc = String(p.description || '').toLowerCase()
+      const cat = String(p.category || '').toLowerCase()
+      // Lightweight relevance: title matches matter most.
+      return (title.includes(q) ? 3 : 0) + (desc.includes(q) ? 1 : 0) + (cat.includes(q) ? 1 : 0)
+    }
+
+    let next = principles.slice()
+
+    // Filters
+    if (featuredOnly) next = next.filter((p) => !!p.featured)
+    if (authorFilter !== 'all') next = next.filter((p) => p.createdBy === authorFilter)
+    if (categoryFilter !== 'all') next = next.filter((p) => p.category === categoryFilter)
+
+    // Search
+    if (q) next = next.filter((p) => score(p) > 0)
+
+    // Sort
+    next.sort((a, b) => {
+      if (sortBy === 'popularity') return (b.likes || 0) - (a.likes || 0)
+      if (sortBy === 'recency') return getDate(b) - getDate(a)
+      if (sortBy === 'title') return String(a.title || '').localeCompare(String(b.title || ''))
+
+      // relevance (default): if no query, fall back to recency
+      if (!q) return getDate(b) - getDate(a)
+      const diff = score(b) - score(a)
+      if (diff !== 0) return diff
+      return getDate(b) - getDate(a)
+    })
+
+    setFilteredPrinciples(next)
+  }, [searchTerm, principles, sortBy, authorFilter, categoryFilter, featuredOnly])
 
   const handleSavePrinciple = (principleData: any) => {
     if (!canEdit && editingPrinciple) {
@@ -232,6 +466,102 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setShowModal(true)
   }
 
+  const handleOpenReader = (principle: any) => {
+    // Looker: only first 2 principles are free; others require per-principle unlock purchase.
+    if (user?.role === 'Looker' && !isPrincipleUnlocked(principle)) {
+      const credits = Number(user?.credits || 0)
+      const price = LOOKER_PRINCIPLE_UNLOCK_PRICE
+      if (credits < price) {
+        alert(`This principle is locked for Looker. You need ${price} credits to unlock it.`)
+        return
+      }
+      const ok = confirm(
+        `Unlock principle?\n\n` +
+          `Title: ${String(principle?.title || '—')}\n` +
+          `Cost: ${price} credits\n` +
+          `Remaining credits: ${credits - price}\n\n` +
+          `Proceed?`
+      )
+      if (!ok) return
+
+      const nextUser = { ...user, credits: credits - price }
+      localStorage.setItem('stod_user', JSON.stringify(nextUser))
+      onUpdateUser?.(nextUser)
+
+      const nextUnlocked = Array.from(new Set([...unlockedPrincipleIds, Number(principle.id)])).sort((a, b) => a - b)
+      setUnlockedPrincipleIds(nextUnlocked)
+      saveUnlockedPrinciples(nextUnlocked)
+    }
+
+    setReadingPrinciple(principle)
+  }
+
+  const handleOpenTool = (tool: ToolKey) => {
+    // Gate tools behind subscription (all roles can see Tools, but need a plan to open tools).
+    if (!toolsSubscribed) {
+      setPendingTool(tool)
+      setActiveTool(null)
+      return
+    }
+    setActiveTool(tool)
+    setPendingTool(null)
+    if (tool !== 'advanced-reader') setAdvancedReaderPrincipleId(null)
+  }
+
+  // Reset tool navigation when leaving the Tools tab
+  useEffect(() => {
+    if (activeTab !== 'matrix') {
+      setActiveTool(null)
+      setAdvancedReaderPrincipleId(null)
+      setPendingTool(null)
+    }
+  }, [activeTab])
+
+  const handleSubscribeTools = (plan: ToolsSubscriptionPlan) => {
+    const pricing = TOOLS_PRICING[plan]
+    const credits = Number(user?.credits || 0)
+    if (credits < pricing.credits) {
+      alert(`Not enough credits. You need ${pricing.credits} credits.`)
+      return
+    }
+
+    const now = Date.now()
+    const current = toolsSubscription
+    const base = isSubscriptionActive(current) ? Date.parse(current!.expiresAt) : now
+    const startedAt = isSubscriptionActive(current) ? current!.startedAt : new Date(now).toISOString()
+    const nextSub: ToolsSubscription = {
+      plan,
+      startedAt,
+      expiresAt: addDays(base, pricing.days),
+    }
+
+    const newExpiryLabel = new Date(nextSub.expiresAt).toLocaleString()
+    const remaining = credits - pricing.credits
+    const isRenewal = isSubscriptionActive(current)
+    const ok = confirm(
+      `${isRenewal ? 'Confirm renewal' : 'Confirm purchase'}\n\n` +
+        `Plan: ${pricing.label}\n` +
+        `Cost: ${pricing.credits} credits\n` +
+        `New expiry: ${newExpiryLabel}\n` +
+        `Remaining credits: ${remaining}\n\n` +
+        `Proceed?`
+    )
+    if (!ok) return
+
+    const nextUser = { ...user, credits: credits - pricing.credits }
+    localStorage.setItem('stod_user', JSON.stringify(nextUser))
+    onUpdateUser?.(nextUser)
+
+    saveToolsSubscription(user.id, nextSub)
+    setToolsSubscription(nextSub)
+
+    // Auto-open the tool the user was trying to access.
+    if (pendingTool) {
+      setActiveTool(pendingTool)
+      setPendingTool(null)
+    }
+  }
+
   const handleDelete = (id: number) => {
     if (!canDelete) {
       alert('You do not have permission to delete principles.')
@@ -268,14 +598,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
   const getRoleInfo = () => {
     const roleInfo: Record<string, { desc: string; color: string; icon: any }> = {
-      'Seeker': { desc: 'Browse and discover value. Read-only access with fast start bonus.', color: 'from-gray-400 to-gray-600', icon: FiEye },
-      'Learner': { desc: 'Save principles, intelligent search, track interests. Can purchase credits.', color: 'from-cyan-500 to-cyan-700', icon: FiBook },
+      'Looker': { desc: 'Browse and discover value. Read-only access with fast start bonus.', color: 'from-gray-400 to-gray-600', icon: FiEye },
+      'Member': { desc: 'Save principles, intelligent search, track interests. Can purchase credits.', color: 'from-cyan-500 to-cyan-700', icon: FiBook },
       'Practitioner': { desc: 'Access forums, hard questions, full videos. Monthly credit allowance.', color: 'from-orange-500 to-orange-700', icon: FiMessageSquare },
-      'Architect': { desc: 'Submit new principles, earn royalties. Build the library.', color: 'from-green-500 to-green-700', icon: FiUpload },
-      'Curator': { desc: 'Review and validate submissions. Earn curation credits. Can cash out.', color: 'from-blue-500 to-blue-700', icon: FiCheckCircle },
+      'Contributor': { desc: 'Submit new principles, earn royalties. Build the library.', color: 'from-green-500 to-green-700', icon: FiUpload },
+      'Moderator': { desc: 'Review and validate submissions. Earn curation credits. Can cash out.', color: 'from-blue-500 to-blue-700', icon: FiCheckCircle },
       'Admin': { desc: 'Full system control, user management, credit economy oversight.', color: 'from-purple-500 to-purple-700', icon: FiUsers },
     }
-    return roleInfo[user?.role] || roleInfo['Seeker']
+    return roleInfo[user?.role] || roleInfo['Looker']
   }
 
   const roleInfo = getRoleInfo()
@@ -291,14 +621,14 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 <FiBook className="text-white text-2xl" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent mb-2">
-                  STOD Repository
+                <h1 className="text-3xl font-bold mb-2 leading-tight text-gray-900">
+                  <span className="italic font-extrabold tracking-tight">Same Thing Only Different</span>{' '}
+                  <span className="not-italic font-semibold tracking-wide text-gray-500 text-2xl align-baseline">
+                    Repository
+                  </span>
                 </h1>
-                <p className="text-gray-600 font-medium italic text-lg mb-1">
-                  Same Thing Only Different
-                </p>
                 <p className="text-xs text-gray-500">
-                  Universal Truths • Pattern Recognition • Real-World Application
+                  Principles • Pattern Recognition • Real-World Application
                 </p>
               </div>
             </div>
@@ -372,7 +702,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             >
               <div className="flex items-center gap-2">
                 <FiBook />
-                Principles
+                Search
               </div>
             </button>
             {canSave && (
@@ -405,21 +735,19 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
               </button>
             )}
-            {canAccessMatrix && (
-              <button
-                onClick={() => setActiveTab('matrix')}
-                className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
-                  activeTab === 'matrix'
-                    ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <FiZap />
-                  Matrix
-                </div>
-              </button>
-            )}
+            <button
+              onClick={() => setActiveTab('matrix')}
+              className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
+                activeTab === 'matrix'
+                  ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <FiZap />
+                Tools
+              </div>
+            </button>
             {canAccessVideos && (
               <button
                 onClick={() => setActiveTab('videos')}
@@ -499,32 +827,96 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         {activeTab === 'principles' && (
           <>
             <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
-              <div className="relative flex-1 max-w-md">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <div className="relative flex-1 max-w-2xl">
+                <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search principles..."
-                  className="w-full pl-10 pr-4 py-3 bg-white/70 backdrop-blur-sm border-2 border-white/40 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                  className="w-full pl-12 pr-4 py-4 bg-white/90 backdrop-blur-md border-2 border-white/70 rounded-2xl shadow-md focus:ring-4 focus:ring-primary-500/25 focus:border-primary-500 transition-all text-gray-900 placeholder:text-gray-500"
                 />
               </div>
-              {canCreate ? (
-                <button
-                  onClick={() => {
-                    setEditingPrinciple(null)
-                    setShowModal(true)
-                  }}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
-                >
-                  <FiPlus />
-                  Add Principle
-                </button>
-              ) : (
+              {!canCreate && (
                 <div className="text-sm text-gray-500 flex items-center px-4">
                   <span>Read-only access</span>
                 </div>
               )}
+            </div>
+
+            {/* Filters + Sort */}
+            <div className="mb-6 flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Sort</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3 py-2 bg-white/90 backdrop-blur-md border border-white/70 rounded-xl shadow-sm text-sm text-gray-900 focus:ring-2 focus:ring-primary-500/25 focus:border-primary-500"
+                  >
+                    <option value="relevance">Relevance</option>
+                    <option value="recency">Recency</option>
+                    <option value="popularity">Popularity</option>
+                    <option value="title">Title (A–Z)</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Author</span>
+                  <select
+                    value={authorFilter}
+                    onChange={(e) => setAuthorFilter(e.target.value)}
+                    className="px-3 py-2 bg-white/90 backdrop-blur-md border border-white/70 rounded-xl shadow-sm text-sm text-gray-900 focus:ring-2 focus:ring-primary-500/25 focus:border-primary-500"
+                  >
+                    <option value="all">All</option>
+                    {authorOptions.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Category</span>
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="px-3 py-2 bg-white/90 backdrop-blur-md border border-white/70 rounded-xl shadow-sm text-sm text-gray-900 focus:ring-2 focus:ring-primary-500/25 focus:border-primary-500"
+                  >
+                    <option value="all">All</option>
+                    {categoryOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-2 px-3 py-2 bg-white/70 backdrop-blur-md border border-white/70 rounded-xl shadow-sm text-sm text-gray-900">
+                  <input
+                    type="checkbox"
+                    checked={featuredOnly}
+                    onChange={(e) => setFeaturedOnly(e.target.checked)}
+                    className="accent-primary-600"
+                  />
+                  Featured only
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('')
+                  setSortBy('relevance')
+                  setAuthorFilter('all')
+                  setCategoryFilter('all')
+                  setFeaturedOnly(false)
+                }}
+                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl hover:bg-white/60 transition"
+              >
+                Clear
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -536,7 +928,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   onEdit={canEdit ? handleEdit : undefined}
                   onDelete={canDelete ? handleDelete : undefined}
                   onSave={canSave ? handleSave : undefined}
+                  onOpen={handleOpenReader}
                   userRole={user.role}
+                  isLocked={user?.role === 'Looker' && !isPrincipleUnlocked(principle)}
+                  unlockPrice={LOOKER_PRINCIPLE_UNLOCK_PRICE}
+                  onUnlock={handleOpenReader}
                 />
               ))}
             </div>
@@ -544,7 +940,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             {filteredPrinciples.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <FiBook className="mx-auto text-4xl mb-4 text-gray-300" />
-                <p>No principles found. {canCreate ? 'Click "Add Principle" to create one.' : 'You have read-only access.'}</p>
+                <p>No principles found. {canCreate ? 'Use “Submit” to add a principle.' : 'You have read-only access.'}</p>
               </div>
             )}
           </>
@@ -552,7 +948,57 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
 
         {activeTab === 'saved' && <SavedPrinciples user={user} principles={principles} />}
         {activeTab === 'forums' && <Forums user={user} />}
-        {activeTab === 'matrix' && <DissonanceMatrix user={user} principles={principles} />}
+        {activeTab === 'matrix' && (
+          <>
+            {activeTool === null ? (
+              <ToolsHub
+                user={user}
+                isSubscribed={toolsSubscribed}
+                subscription={toolsSubscription}
+                pendingTool={pendingTool}
+                onRequestTool={(t) => setPendingTool(t)}
+                onSubscribe={handleSubscribeTools}
+                onOpenTool={handleOpenTool}
+              />
+            ) : (
+              <div>
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTool(null)}
+                    className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl hover:bg-white/60 transition"
+                  >
+                    ← Back to Tools
+                  </button>
+                </div>
+
+                {activeTool === 'dissonance-matrix' && (
+                  <DissonanceMatrix user={user} principles={principles} />
+                )}
+
+                {activeTool === 'principle-map' && (
+                  <PrincipleMap
+                    principles={principles}
+                    onOpenPrinciple={(p) => handleOpenReader(p)}
+                  />
+                )}
+
+                {activeTool === 'advanced-reader' && (
+                  <AdvancedReader
+                    user={user}
+                    principles={principles}
+                    initialPrincipleId={advancedReaderPrincipleId}
+                    onGoToVideos={() => setActiveTab('videos')}
+                    onGoToSessions={() => setActiveTab('sessions')}
+                    isPrincipleUnlocked={(id) => isPrincipleUnlocked({ id })}
+                    unlockPrice={LOOKER_PRINCIPLE_UNLOCK_PRICE}
+                    onUnlockPrinciple={(p) => handleOpenReader(p)}
+                  />
+                )}
+              </div>
+            )}
+          </>
+        )}
         {activeTab === 'videos' && <Videos user={user} />}
         {activeTab === 'sessions' && <Sessions user={user} onCreditUpdate={(newCredits) => {
           // Credits are already updated in localStorage by Sessions component
@@ -571,6 +1017,31 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             setShowModal(false)
             setEditingPrinciple(null)
           }}
+        />
+      )}
+
+      {readingPrinciple && (
+        <PrincipleReaderModal
+          principle={readingPrinciple}
+          onClose={() => setReadingPrinciple(null)}
+          canSave={canSave}
+          isSaved={!!(user && readingPrinciple.savedBy && readingPrinciple.savedBy.includes(user.id))}
+          onToggleSave={canSave ? handleSave : undefined}
+          canAccessHardQuestions={!!(['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || ''))}
+          canReveal={!!(['Admin', 'Moderator', 'Contributor'].includes(user?.role || ''))}
+          onOpenAdvancedReader={(p) => {
+            setReadingPrinciple(null)
+            setActiveTab('matrix')
+            setAdvancedReaderPrincipleId(Number(p?.id) || null)
+            if (!toolsSubscribed) {
+              setActiveTool(null)
+              setPendingTool('advanced-reader')
+            } else {
+              setActiveTool('advanced-reader')
+              setPendingTool(null)
+            }
+          }}
+          currentUser={{ id: user?.id, name: user?.name, role: user?.role }}
         />
       )}
     </div>

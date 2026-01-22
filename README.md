@@ -37,10 +37,12 @@ npm run dev
 
 ## Demo Credentials
 
-- **Administrator**: `admin` / `admin123`
-- **Manager**: `manager` / `manager123`
-- **Editor**: `editor` / `editor123`
-- **Viewer**: `viewer` / `viewer123`
+- **Admin**: `admin` / `admin123`
+- **Moderator**: `moderator` / `moderator123`
+- **Contributor**: `contributor` / `contributor123`
+- **Practitioner**: `practitioner` / `practitioner123`
+- **Member**: `member` / `member123`
+- **Looker**: `looker` / `looker123`
 
 ## Project Structure
 

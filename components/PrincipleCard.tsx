@@ -1,17 +1,32 @@
 'use client'
 
-import { FiEdit2, FiTrash2, FiEye, FiTag, FiClock, FiUser, FiSave, FiStar, FiHelpCircle } from 'react-icons/fi'
+import { FiEdit2, FiTrash2, FiEye, FiTag, FiClock, FiUser, FiSave, FiStar, FiHelpCircle, FiLock } from 'react-icons/fi'
 
 interface PrincipleCardProps {
   principle: any
   onEdit?: (principle: any) => void
   onDelete?: (id: number) => void
   onSave?: (id: number) => void
+  onOpen?: (principle: any) => void
+  onUnlock?: (principle: any) => void
+  isLocked?: boolean
+  unlockPrice?: number
   user?: any
   userRole?: string
 }
 
-export default function PrincipleCard({ principle, onEdit, onDelete, onSave, user, userRole }: PrincipleCardProps) {
+export default function PrincipleCard({
+  principle,
+  onEdit,
+  onDelete,
+  onSave,
+  onOpen,
+  onUnlock,
+  isLocked,
+  unlockPrice,
+  user,
+  userRole,
+}: PrincipleCardProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Active':
@@ -46,17 +61,37 @@ export default function PrincipleCard({ principle, onEdit, onDelete, onSave, use
     }
   }
 
-  const canEdit = userRole && ['Curator', 'Admin'].includes(userRole)
+  const canEdit = userRole && ['Moderator', 'Admin'].includes(userRole)
   const canDelete = userRole === 'Admin'
-  const canSave = userRole && ['Learner', 'Practitioner', 'Architect', 'Curator', 'Admin'].includes(userRole)
-  const canAccessHardQuestions = userRole && ['Practitioner', 'Architect', 'Curator', 'Admin'].includes(userRole)
+  const canSave = userRole && ['Member', 'Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(userRole)
+  const canAccessHardQuestions = userRole && ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(userRole)
 
   const isSaved = user && principle.savedBy && principle.savedBy.includes(user.id)
   const isFeatured = principle.featured
   const isMostLiked = principle.mostLiked
 
   return (
-    <div className="bg-white/75 backdrop-blur-md rounded-xl shadow-md hover:shadow-xl transition-all p-6 border-2 border-white/30 hover:border-primary-300/50 group relative overflow-hidden">
+    <div
+      className="bg-white/75 backdrop-blur-md rounded-xl shadow-md hover:shadow-xl transition-all p-6 border-2 border-white/30 hover:border-primary-300/50 group relative overflow-hidden cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={() => (isLocked ? onUnlock?.(principle) : onOpen?.(principle))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          isLocked ? onUnlock?.(principle) : onOpen?.(principle)
+        }
+      }}
+    >
+      {isLocked && (
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute inset-0 bg-white/35" />
+          <div className="absolute top-3 right-3 inline-flex items-center gap-2 text-xs font-bold px-3 py-1 rounded-full bg-gray-900/85 text-white border border-white/20 backdrop-blur-md">
+            <FiLock />
+            Locked
+          </div>
+        </div>
+      )}
       {isFeatured && (
         <div className="absolute top-0 right-0 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-bl-lg text-xs font-bold">
           ⭐ Featured
@@ -147,9 +182,25 @@ export default function PrincipleCard({ principle, onEdit, onDelete, onSave, use
         </div>
 
         <div className="flex gap-2">
+          {isLocked && onUnlock && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onUnlock(principle)
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-900/85 hover:bg-gray-900 text-white rounded-lg transition text-sm font-semibold border border-white/20 backdrop-blur-sm"
+            >
+              <FiLock />
+              Unlock{typeof unlockPrice === 'number' ? ` (${unlockPrice} cr)` : ''}
+            </button>
+          )}
           {canSave && onSave && (
             <button
-              onClick={() => onSave(principle.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSave(principle.id)
+              }}
+              disabled={!!isLocked}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
                 isSaved
                   ? 'bg-primary-100 text-primary-700 hover:bg-primary-200'
@@ -162,7 +213,11 @@ export default function PrincipleCard({ principle, onEdit, onDelete, onSave, use
           )}
           {canEdit && onEdit && (
             <button
-              onClick={() => onEdit(principle)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(principle)
+              }}
+              disabled={!!isLocked}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-50/70 hover:bg-primary-100/80 backdrop-blur-sm text-primary-700 rounded-lg transition text-sm font-medium"
             >
               <FiEdit2 />
@@ -171,16 +226,26 @@ export default function PrincipleCard({ principle, onEdit, onDelete, onSave, use
           )}
           {canDelete && onDelete && (
             <button
-              onClick={() => onDelete(principle.id)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(principle.id)
+              }}
+              disabled={!!isLocked}
               className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition text-sm font-medium"
             >
               <FiTrash2 />
             </button>
           )}
           {!canEdit && !canSave && (
-            <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/60 hover:bg-white/80 backdrop-blur-sm text-gray-700 rounded-lg transition text-sm font-medium">
-              <FiEye />
-              View
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                isLocked ? onUnlock?.(principle) : onOpen?.(principle)
+              }}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white/60 hover:bg-white/80 backdrop-blur-sm text-gray-700 rounded-lg transition text-sm font-medium"
+            >
+              {isLocked ? <FiLock /> : <FiEye />}
+              {isLocked ? 'Unlock' : 'View'}
             </button>
           )}
         </div>

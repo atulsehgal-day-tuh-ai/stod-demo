@@ -48,8 +48,8 @@ export default function CreditsWallet({ user, onPurchase, onCashOut }: CreditsWa
     }
   }
 
-  const canPurchase = ['Learner', 'Practitioner'].includes(user.role)
-  const canCashOut = user.role === 'Curator'
+  const canPurchase = ['Member', 'Practitioner'].includes(user.role)
+  const canCashOut = user.role === 'Moderator'
 
   return (
     <div className="bg-gradient-to-br from-primary-50/80 via-primary-100/80 to-purple-50/80 backdrop-blur-md rounded-2xl p-6 border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
@@ -59,7 +59,7 @@ export default function CreditsWallet({ user, onPurchase, onCashOut }: CreditsWa
             {getWalletIcon()}
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-900">STOD Credits</h3>
+          <h3 className="text-xl font-bold text-gray-900">Credits</h3>
             <p className="text-sm text-gray-600 mt-1">{getWalletDescription()}</p>
           </div>
         </div>
