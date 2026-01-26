@@ -61,10 +61,11 @@ export default function PrincipleCard({
     }
   }
 
-  const canEdit = userRole && ['Moderator', 'Admin'].includes(userRole)
-  const canDelete = userRole === 'Admin'
-  const canSave = userRole && ['Member', 'Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(userRole)
-  const canAccessHardQuestions = userRole && ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(userRole)
+  // Phase 1: everyone can access everything (we’ll tighten later).
+  const canEdit = true
+  const canDelete = true
+  const canSave = true
+  const canAccessHardQuestions = true
 
   const isSaved = user && principle.savedBy && principle.savedBy.includes(user.id)
   const isFeatured = principle.featured

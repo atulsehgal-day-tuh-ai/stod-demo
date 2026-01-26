@@ -48,8 +48,9 @@ export default function CreditsWallet({ user, onPurchase, onCashOut }: CreditsWa
     }
   }
 
-  const canPurchase = ['Member', 'Practitioner'].includes(user.role)
-  const canCashOut = user.role === 'Moderator'
+  // Phase 1: keep the economy UI visible for all roles.
+  const canPurchase = true
+  const canCashOut = true
 
   return (
     <div className="bg-gradient-to-br from-primary-50/80 via-primary-100/80 to-purple-50/80 backdrop-blur-md rounded-2xl p-6 border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">

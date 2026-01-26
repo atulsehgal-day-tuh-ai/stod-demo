@@ -1,8 +1,8 @@
 'use client'
 
-import { FiActivity, FiBookOpen, FiGrid, FiLayers, FiLock, FiMap, FiTool, FiZap } from 'react-icons/fi'
+import { FiActivity, FiGrid, FiLayers, FiLock, FiMap, FiTool, FiZap } from 'react-icons/fi'
 
-export type ToolKey = 'dissonance-matrix' | 'principle-map' | 'advanced-reader'
+export type ToolKey = 'dissonance-matrix' | 'principle-map'
 
 interface ToolsHubProps {
   user: any
@@ -23,6 +23,9 @@ export default function ToolsHub({
   onSubscribe,
   onOpenTool,
 }: ToolsHubProps) {
+  // Phase 1: tools are open to everyone (we’ll reintroduce subscription gating later).
+  const phase1Open = true
+
   const tools: Array<{
     key: ToolKey | 'coming-soon'
     title: string
@@ -42,13 +45,6 @@ export default function ToolsHub({
       title: 'Principle Map',
       description: 'Visualize how principles relate to each other.',
       icon: FiMap,
-      enabled: true,
-    },
-    {
-      key: 'advanced-reader',
-      title: 'Advanced Reader',
-      description: 'Read a principle and see related videos and upcoming sessions.',
-      icon: FiBookOpen,
       enabled: true,
     },
     {
@@ -76,6 +72,7 @@ export default function ToolsHub({
 
   const credits = Number(user?.credits || 0)
   const expiresLabel = subscription?.expiresAt ? new Date(subscription.expiresAt).toLocaleDateString() : ''
+  const effectiveSubscribed = phase1Open ? true : isSubscribed
 
   return (
     <div className="min-h-[500px]">
@@ -89,85 +86,83 @@ export default function ToolsHub({
         </p>
       </div>
 
-      {isSubscribed ? (
-        <div className="mb-6 rounded-2xl bg-white/75 border border-white/40 backdrop-blur-md shadow-md p-5">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-              <div className="text-sm font-bold text-gray-900">Tools subscription active</div>
-              <div className="text-sm text-gray-600 mt-1">
-                Plan:{' '}
-                <span className="font-semibold">
-                  {subscription?.plan === 'annual' ? 'Annual' : 'Monthly'}
-                </span>
-                {expiresLabel ? (
-                  <>
-                    {' '}• Active until <span className="font-semibold">{expiresLabel}</span>
-                  </>
-                ) : null}
-              </div>
+      <div className="mb-6 rounded-2xl bg-white/75 border border-white/40 backdrop-blur-md shadow-md p-5">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-gray-900">
+              {phase1Open ? 'Tools are open (Phase 1)' : effectiveSubscribed ? 'Tools subscription active' : 'Unlock Tools'}
             </div>
-            <div className="text-sm text-gray-700 font-semibold">
-              Credits: <span className="text-gray-900">{credits.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-6 rounded-2xl bg-white/75 border border-white/40 backdrop-blur-md shadow-md p-5">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <div className="text-lg font-bold text-gray-900">Unlock Tools</div>
-              <div className="text-sm text-gray-600 mt-1">
-                Tools are available to all roles, but require a subscription purchased with credits.
-                {pendingTool ? (
-                  <>
-                    {' '}You tried to open <span className="font-semibold">{pendingTool.replaceAll('-', ' ')}</span>.
-                  </>
-                ) : null}
-              </div>
-              <div className="text-sm text-gray-700 font-semibold mt-2">
-                Your credits: <span className="text-gray-900">{credits.toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto">
-              <button
-                type="button"
-                onClick={() => onSubscribe('monthly')}
-                disabled={credits < 250}
-                className={`rounded-2xl p-4 border-2 text-left transition ${
-                  credits < 250
-                    ? 'bg-white/60 border-white/30 opacity-70 cursor-not-allowed'
-                    : 'bg-white/85 border-white/60 hover:border-primary-300/60 hover:shadow-md'
-                }`}
-              >
-                <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Monthly</div>
-                <div className="text-2xl font-bold text-gray-900 mt-1">250 credits</div>
-                <div className="text-sm text-gray-600 mt-1">Access all tools for 30 days.</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onSubscribe('annual')}
-                disabled={credits < 2500}
-                className={`rounded-2xl p-4 border-2 text-left transition ${
-                  credits < 2500
-                    ? 'bg-white/60 border-white/30 opacity-70 cursor-not-allowed'
-                    : 'bg-white/85 border-white/60 hover:border-primary-300/60 hover:shadow-md'
-                }`}
-              >
-                <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Annual</div>
-                <div className="text-2xl font-bold text-gray-900 mt-1">2500 credits</div>
-                <div className="text-sm text-gray-600 mt-1">Best value for 12 months.</div>
-              </button>
+            <div className="text-sm text-gray-600 mt-1">
+              {phase1Open ? (
+                <>All tools are currently available to all users. We’ll reintroduce subscription gating later.</>
+              ) : effectiveSubscribed ? (
+                <>
+                  Plan:{' '}
+                  <span className="font-semibold">
+                    {subscription?.plan === 'annual' ? 'Annual' : 'Monthly'}
+                  </span>
+                  {expiresLabel ? (
+                    <>
+                      {' '}• Active until <span className="font-semibold">{expiresLabel}</span>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Tools are available to all roles, but require a subscription purchased with credits.
+                  {pendingTool ? (
+                    <>
+                      {' '}You tried to open <span className="font-semibold">{pendingTool.replaceAll('-', ' ')}</span>.
+                    </>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
+          <div className="text-sm text-gray-700 font-semibold">
+            Credits: <span className="text-gray-900">{credits.toLocaleString()}</span>
+          </div>
         </div>
-      )}
+
+        {!phase1Open && !effectiveSubscribed && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => onSubscribe('monthly')}
+              disabled={credits < 250}
+              className={`rounded-2xl p-4 border-2 text-left transition ${
+                credits < 250
+                  ? 'bg-white/60 border-white/30 opacity-70 cursor-not-allowed'
+                  : 'bg-white/85 border-white/60 hover:border-primary-300/60 hover:shadow-md'
+              }`}
+            >
+              <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Monthly</div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">250 credits</div>
+              <div className="text-sm text-gray-600 mt-1">Access all tools for 30 days.</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSubscribe('annual')}
+              disabled={credits < 2500}
+              className={`rounded-2xl p-4 border-2 text-left transition ${
+                credits < 2500
+                  ? 'bg-white/60 border-white/30 opacity-70 cursor-not-allowed'
+                  : 'bg-white/85 border-white/60 hover:border-primary-300/60 hover:shadow-md'
+              }`}
+            >
+              <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Annual</div>
+              <div className="text-2xl font-bold text-gray-900 mt-1">2500 credits</div>
+              <div className="text-sm text-gray-600 mt-1">Best value for 12 months.</div>
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {tools.map((t, idx) => {
           const Icon = t.icon
-          const locked = t.enabled && t.key !== 'coming-soon' && !isSubscribed
+          const locked = false
           return (
             <button
               key={`${t.title}-${idx}`}

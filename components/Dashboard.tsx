@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { FiLogOut, FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiUser, FiBook, FiSave, FiUsers, FiMessageSquare, FiHelpCircle, FiUpload, FiCheckCircle, FiStar, FiZap, FiPlay, FiCalendar } from 'react-icons/fi'
+import { FiLogOut, FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiUser, FiBook, FiSave, FiUsers, FiMessageSquare, FiHelpCircle, FiUpload, FiCheckCircle, FiStar, FiZap, FiPlay, FiCalendar, FiDollarSign, FiLock } from 'react-icons/fi'
 import PrincipleCard from './PrincipleCard'
 import PrincipleModal from './PrincipleModal'
-import PrincipleReaderModal from './PrincipleReaderModal'
 import UserManagement from './UserManagement'
 import CreditsWallet from './CreditsWallet'
 import PrincipleSubmission from './PrincipleSubmission'
@@ -17,6 +16,8 @@ import PrincipleMap from './PrincipleMap'
 import AdvancedReader from './AdvancedReader'
 import Videos from './Videos'
 import Sessions from './Sessions'
+import Collaborate from './Collaborate'
+import { canCollaborate, canOpenPrinciple, canSeeReview, canSeeUsers, canUseTools, getNonSubscriberAllowedFeaturedIds } from '@/lib/permissions'
 
 interface DashboardProps {
   user: any
@@ -30,10 +31,6 @@ type ToolsSubscription = {
   startedAt: string
   expiresAt: string
 }
-
-const PRINCIPLE_UNLOCKS_LS_KEY = 'stod_principle_unlocks_by_user'
-const LOOKER_FREE_PREVIEW_COUNT = 2
-const LOOKER_PRINCIPLE_UNLOCK_PRICE = 25
 
 const TOOLS_SUBSCRIPTION_LS_KEY = 'stod_tools_subscription_by_user'
 const TOOLS_PRICING: Record<ToolsSubscriptionPlan, { label: string; credits: number; days: number }> = {
@@ -105,83 +102,46 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
   const [featuredOnly, setFeaturedOnly] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingPrinciple, setEditingPrinciple] = useState<any>(null)
-  const [readingPrinciple, setReadingPrinciple] = useState<any>(null)
-  const [activeTab, setActiveTab] = useState<'principles' | 'users' | 'submissions' | 'review' | 'forums' | 'saved' | 'matrix' | 'videos' | 'sessions'>('principles')
-  const [showCreditsModal, setShowCreditsModal] = useState(false)
+  const [advancedReaderOpen, setAdvancedReaderOpen] = useState(false)
+  const [advancedReaderInitialId, setAdvancedReaderInitialId] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState<
+    'principles' | 'users' | 'submissions' | 'collaborate' | 'review' | 'forums' | 'saved' | 'matrix' | 'videos' | 'sessions' | 'credits'
+  >('principles')
+  const [proposeOpenDraftId, setProposeOpenDraftId] = useState<number | null>(null)
   const [activeTool, setActiveTool] = useState<ToolKey | null>(null)
-  const [advancedReaderPrincipleId, setAdvancedReaderPrincipleId] = useState<number | null>(null)
   const [toolsSubscription, setToolsSubscription] = useState<ToolsSubscription | null>(null)
   const [pendingTool, setPendingTool] = useState<ToolKey | null>(null)
-  const [unlockedPrincipleIds, setUnlockedPrincipleIds] = useState<number[]>([])
 
-  // Role-based permissions
-  const isLooker = user?.role === 'Looker'
-  const isMember = user?.role === 'Member'
-  const isPractitioner = user?.role === 'Practitioner'
-  const isContributor = user?.role === 'Contributor'
-  const isModerator = user?.role === 'Moderator'
-  const isAdmin = user?.role === 'Admin'
-
+  // Phase 1 strategy: everyone gets access to everything.
+  // (We’ll tighten permissions later capability-by-capability.)
   const canView = true
-  const canSave = ['Member', 'Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
-  const canCreate = ['Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
-  const canEdit = ['Moderator', 'Admin'].includes(user?.role || '')
-  const canDelete = user?.role === 'Admin'
-  const canCurate = ['Moderator', 'Admin'].includes(user?.role || '')
-  const canManageUsers = user?.role === 'Admin'
-  const canAccessForums = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
-  const canSubmitPrinciples = ['Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
-  const canAccessMatrix = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
-  const canAccessVideos = ['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || '')
+  const canSave = true
+  const canCreate = true
+  const canEdit = true
+  const canDelete = true
+  const canCurate = true
+  const canManageUsers = true
+  const canAccessForums = true
+  const canSubmitPrinciples = true
+  const canAccessMatrix = true
+  const canAccessVideos = true
 
-  const toolsSubscribed = isSubscriptionActive(toolsSubscription)
+  const role = user?.role
+  const allowTools = canUseTools(role)
+  const allowReview = canSeeReview(role)
+  const allowUsers = canSeeUsers(role)
+  const allowCollaborate = canCollaborate(role)
+  const allowedFeaturedIds = useMemo(() => getNonSubscriberAllowedFeaturedIds(principles), [principles])
+
+  // Phase 1: tools content is open once you can access Tools at all.
+  const toolsSubscribed = true
 
   useEffect(() => {
     if (!user?.id) return
     setToolsSubscription(loadToolsSubscription(user.id))
   }, [user?.id])
 
-  useEffect(() => {
-    if (!user?.id) return
-    try {
-      const raw = localStorage.getItem(PRINCIPLE_UNLOCKS_LS_KEY)
-      const map = raw ? JSON.parse(raw) : {}
-      const ids = Array.isArray(map[String(user.id)]) ? map[String(user.id)] : []
-      setUnlockedPrincipleIds(ids.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n)))
-    } catch {
-      setUnlockedPrincipleIds([])
-    }
-  }, [user?.id])
-
-  const lookerFreeIds = useMemo(() => {
-    const ids = principles
-      .slice()
-      .sort((a, b) => Number(a.id) - Number(b.id))
-      .slice(0, LOOKER_FREE_PREVIEW_COUNT)
-      .map((p) => Number(p.id))
-      .filter((n) => Number.isFinite(n))
-    return new Set(ids)
-  }, [principles])
-
-  const isPrincipleUnlocked = (p: any) => {
-    const id = Number(p?.id)
-    if (!Number.isFinite(id)) return true
-    if (user?.role !== 'Looker') return true
-    if (lookerFreeIds.has(id)) return true
-    return unlockedPrincipleIds.includes(id)
-  }
-
-  const saveUnlockedPrinciples = (ids: number[]) => {
-    if (!user?.id) return
-    try {
-      const raw = localStorage.getItem(PRINCIPLE_UNLOCKS_LS_KEY)
-      const map = raw ? JSON.parse(raw) : {}
-      map[String(user.id)] = ids
-      localStorage.setItem(PRINCIPLE_UNLOCKS_LS_KEY, JSON.stringify(map))
-    } catch {
-      // ignore
-    }
-  }
+  const isPrincipleUnlocked = (_p: any) => true
 
   useEffect(() => {
     const stored = localStorage.getItem('stod_principles')
@@ -466,37 +426,31 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
     setShowModal(true)
   }
 
+  const [lockedPrinciple, setLockedPrinciple] = useState<any | null>(null)
+
+  const isPrincipleLockedForUser = (principle: any) => {
+    return !canOpenPrinciple({
+      role,
+      user,
+      principle,
+      allowedFeaturedIds,
+    })
+  }
+
   const handleOpenReader = (principle: any) => {
-    // Looker: only first 2 principles are free; others require per-principle unlock purchase.
-    if (user?.role === 'Looker' && !isPrincipleUnlocked(principle)) {
-      const credits = Number(user?.credits || 0)
-      const price = LOOKER_PRINCIPLE_UNLOCK_PRICE
-      if (credits < price) {
-        alert(`This principle is locked for Looker. You need ${price} credits to unlock it.`)
-        return
-      }
-      const ok = confirm(
-        `Unlock principle?\n\n` +
-          `Title: ${String(principle?.title || '—')}\n` +
-          `Cost: ${price} credits\n` +
-          `Remaining credits: ${credits - price}\n\n` +
-          `Proceed?`
-      )
-      if (!ok) return
-
-      const nextUser = { ...user, credits: credits - price }
-      localStorage.setItem('stod_user', JSON.stringify(nextUser))
-      onUpdateUser?.(nextUser)
-
-      const nextUnlocked = Array.from(new Set([...unlockedPrincipleIds, Number(principle.id)])).sort((a, b) => a - b)
-      setUnlockedPrincipleIds(nextUnlocked)
-      saveUnlockedPrinciples(nextUnlocked)
+    if (isPrincipleLockedForUser(principle)) {
+      setLockedPrinciple(principle)
+      return
     }
-
-    setReadingPrinciple(principle)
+    setAdvancedReaderInitialId(Number(principle?.id) || null)
+    setAdvancedReaderOpen(true)
   }
 
   const handleOpenTool = (tool: ToolKey) => {
+    if (!allowTools) {
+      alert('Tools are available to Subscribers and above.')
+      return
+    }
     // Gate tools behind subscription (all roles can see Tools, but need a plan to open tools).
     if (!toolsSubscribed) {
       setPendingTool(tool)
@@ -505,17 +459,23 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
     }
     setActiveTool(tool)
     setPendingTool(null)
-    if (tool !== 'advanced-reader') setAdvancedReaderPrincipleId(null)
   }
 
   // Reset tool navigation when leaving the Tools tab
   useEffect(() => {
     if (activeTab !== 'matrix') {
       setActiveTool(null)
-      setAdvancedReaderPrincipleId(null)
       setPendingTool(null)
     }
   }, [activeTab])
+
+  // Guard: if the current role is not allowed to view a tab, redirect to a safe default.
+  useEffect(() => {
+    if (activeTab === 'matrix' && !allowTools) setActiveTab('principles')
+    if (activeTab === 'collaborate' && !allowCollaborate) setActiveTab('principles')
+    if (activeTab === 'review' && !allowReview) setActiveTab('principles')
+    if (activeTab === 'users' && !allowUsers) setActiveTab('principles')
+  }, [activeTab, allowTools, allowCollaborate, allowReview, allowUsers])
 
   const handleSubscribeTools = (plan: ToolsSubscriptionPlan) => {
     const pricing = TOOLS_PRICING[plan]
@@ -598,14 +558,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
 
   const getRoleInfo = () => {
     const roleInfo: Record<string, { desc: string; color: string; icon: any }> = {
-      'Looker': { desc: 'Browse and discover value. Read-only access with fast start bonus.', color: 'from-gray-400 to-gray-600', icon: FiEye },
-      'Member': { desc: 'Save principles, intelligent search, track interests. Can purchase credits.', color: 'from-cyan-500 to-cyan-700', icon: FiBook },
-      'Practitioner': { desc: 'Access forums, hard questions, full videos. Monthly credit allowance.', color: 'from-orange-500 to-orange-700', icon: FiMessageSquare },
-      'Contributor': { desc: 'Submit new principles, earn royalties. Build the library.', color: 'from-green-500 to-green-700', icon: FiUpload },
+      'Non-subscriber': { desc: 'Start here. Explore everything during Phase 1 (permissions will tighten later).', color: 'from-gray-400 to-gray-600', icon: FiEye },
+      'Subscriber': { desc: 'Full access during Phase 1. Later: premium tools and community benefits.', color: 'from-cyan-500 to-cyan-700', icon: FiBook },
       'Moderator': { desc: 'Review and validate submissions. Earn curation credits. Can cash out.', color: 'from-blue-500 to-blue-700', icon: FiCheckCircle },
       'Admin': { desc: 'Full system control, user management, credit economy oversight.', color: 'from-purple-500 to-purple-700', icon: FiUsers },
     }
-    return roleInfo[user?.role] || roleInfo['Looker']
+    return roleInfo[user?.role] || roleInfo['Non-subscriber']
   }
 
   const roleInfo = getRoleInfo()
@@ -655,14 +613,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <CreditsWallet 
-            user={user} 
-            onPurchase={() => setShowCreditsModal(true)}
-            onCashOut={() => alert('Cash out feature coming soon!')}
-          />
-        </div>
-
         <div className="mb-6 p-6 rounded-2xl bg-gradient-to-r from-purple-600/85 to-indigo-700/85 backdrop-blur-md text-white shadow-xl border border-white/20">
           <div className="text-center">
             <p className="text-xl font-bold italic mb-2">
@@ -716,7 +666,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
               >
                 <div className="flex items-center gap-2">
                   <FiSave />
-                  Saved
+                  Favorites
                 </div>
               </button>
             )}
@@ -737,16 +687,18 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
             )}
             <button
               onClick={() => setActiveTab('matrix')}
-              className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
-                activeTab === 'matrix'
-                  ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+                disabled={!allowTools}
+                className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap flex items-center gap-2 ${
+                  !allowTools
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : activeTab === 'matrix'
+                      ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                }`}
             >
-              <div className="flex items-center gap-2">
                 <FiZap />
                 Tools
-              </div>
+                {!allowTools && <FiLock className="text-sm" />}
             </button>
             {canAccessVideos && (
               <button
@@ -787,11 +739,39 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
               >
                 <div className="flex items-center gap-2">
                   <FiUpload />
-                  Submit
+                  Propose
                 </div>
               </button>
             )}
-            {canCurate && (
+            <button
+              onClick={() => setActiveTab('collaborate')}
+              disabled={!allowCollaborate}
+              className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap flex items-center gap-2 ${
+                !allowCollaborate
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : activeTab === 'collaborate'
+                    ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FiUsers />
+              Collaborate
+              {!allowCollaborate && <FiLock className="text-sm" />}
+            </button>
+            <button
+              onClick={() => setActiveTab('credits')}
+              className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
+                activeTab === 'credits'
+                  ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <FiDollarSign />
+                Credits
+              </div>
+            </button>
+            {allowReview && (
               <button
                 onClick={() => setActiveTab('review')}
                 className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
@@ -806,7 +786,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                 </div>
               </button>
             )}
-            {canManageUsers && (
+            {allowUsers && (
               <button
                 onClick={() => setActiveTab('users')}
                 className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
@@ -930,9 +910,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                   onSave={canSave ? handleSave : undefined}
                   onOpen={handleOpenReader}
                   userRole={user.role}
-                  isLocked={user?.role === 'Looker' && !isPrincipleUnlocked(principle)}
-                  unlockPrice={LOOKER_PRINCIPLE_UNLOCK_PRICE}
-                  onUnlock={handleOpenReader}
+                  isLocked={isPrincipleLockedForUser(principle)}
+                  onUnlock={() => setLockedPrinciple(principle)}
                 />
               ))}
             </div>
@@ -940,7 +919,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
             {filteredPrinciples.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <FiBook className="mx-auto text-4xl mb-4 text-gray-300" />
-                <p>No principles found. {canCreate ? 'Use “Submit” to add a principle.' : 'You have read-only access.'}</p>
+                <p>No principles found. {canCreate ? 'Use “Propose” to add a principle.' : 'You have read-only access.'}</p>
               </div>
             )}
           </>
@@ -948,7 +927,14 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
 
         {activeTab === 'saved' && <SavedPrinciples user={user} principles={principles} />}
         {activeTab === 'forums' && <Forums user={user} />}
-        {activeTab === 'matrix' && (
+        {activeTab === 'credits' && (
+          <CreditsWallet
+            user={user}
+            onPurchase={() => alert('Purchase credits flow coming soon!')}
+            onCashOut={() => alert('Cash out feature coming soon!')}
+          />
+        )}
+        {activeTab === 'matrix' && allowTools && (
           <>
             {activeTool === null ? (
               <ToolsHub
@@ -983,18 +969,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                   />
                 )}
 
-                {activeTool === 'advanced-reader' && (
-                  <AdvancedReader
-                    user={user}
-                    principles={principles}
-                    initialPrincipleId={advancedReaderPrincipleId}
-                    onGoToVideos={() => setActiveTab('videos')}
-                    onGoToSessions={() => setActiveTab('sessions')}
-                    isPrincipleUnlocked={(id) => isPrincipleUnlocked({ id })}
-                    unlockPrice={LOOKER_PRINCIPLE_UNLOCK_PRICE}
-                    onUnlockPrinciple={(p) => handleOpenReader(p)}
-                  />
-                )}
+                {/* Advanced Reader is now the default principle reader (opened from Search). */}
               </div>
             )}
           </>
@@ -1004,9 +979,26 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
           // Credits are already updated in localStorage by Sessions component
           // This callback can be used for future real-time updates if needed
         }} />}
-        {activeTab === 'submissions' && <PrincipleSubmission user={user} principles={principles} setPrinciples={setPrinciples} />}
-        {activeTab === 'review' && <CuratorReview user={user} principles={principles} setPrinciples={setPrinciples} />}
-        {activeTab === 'users' && <UserManagement />}
+        {activeTab === 'submissions' && (
+          <PrincipleSubmission
+            user={user}
+            principles={principles}
+            setPrinciples={setPrinciples}
+            initialDraftId={proposeOpenDraftId}
+            initialStep={2}
+          />
+        )}
+        {activeTab === 'collaborate' && (
+          <Collaborate
+            user={user}
+            onOpenDraft={(draftId) => {
+              setProposeOpenDraftId(draftId)
+              setActiveTab('submissions')
+            }}
+          />
+        )}
+        {activeTab === 'review' && allowReview && <CuratorReview user={user} principles={principles} setPrinciples={setPrinciples} />}
+        {activeTab === 'users' && allowUsers && <UserManagement />}
       </main>
 
       {showModal && (
@@ -1020,29 +1012,114 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
         />
       )}
 
-      {readingPrinciple && (
-        <PrincipleReaderModal
-          principle={readingPrinciple}
-          onClose={() => setReadingPrinciple(null)}
-          canSave={canSave}
-          isSaved={!!(user && readingPrinciple.savedBy && readingPrinciple.savedBy.includes(user.id))}
-          onToggleSave={canSave ? handleSave : undefined}
-          canAccessHardQuestions={!!(['Practitioner', 'Contributor', 'Moderator', 'Admin'].includes(user?.role || ''))}
-          canReveal={!!(['Admin', 'Moderator', 'Contributor'].includes(user?.role || ''))}
-          onOpenAdvancedReader={(p) => {
-            setReadingPrinciple(null)
-            setActiveTab('matrix')
-            setAdvancedReaderPrincipleId(Number(p?.id) || null)
-            if (!toolsSubscribed) {
-              setActiveTool(null)
-              setPendingTool('advanced-reader')
-            } else {
-              setActiveTool('advanced-reader')
-              setPendingTool(null)
-            }
-          }}
-          currentUser={{ id: user?.id, name: user?.name, role: user?.role }}
-        />
+      {advancedReaderOpen && (
+        <div className="fixed inset-0 z-[120]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close reader"
+            onClick={() => setAdvancedReaderOpen(false)}
+          />
+          <div className="absolute inset-0 overflow-y-auto">
+            <div className="min-h-full px-4 py-6">
+              <div className="mx-auto w-full max-w-7xl">
+                <div className="sticky top-3 z-10 mb-4 flex items-center justify-between gap-3 rounded-2xl bg-white/90 backdrop-blur-md border border-white/60 shadow-md px-4 py-3">
+                  <div className="text-sm font-semibold text-gray-700">Advanced Reader</div>
+                  <button
+                    type="button"
+                    onClick={() => setAdvancedReaderOpen(false)}
+                    className="px-3 py-2 rounded-xl hover:bg-gray-100 text-gray-700 font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <AdvancedReader
+                  user={user}
+                  principles={principles}
+                  initialPrincipleId={advancedReaderInitialId}
+                  onGoToVideos={() => {
+                    setAdvancedReaderOpen(false)
+                    setActiveTab('videos')
+                  }}
+                  onGoToSessions={() => {
+                    setAdvancedReaderOpen(false)
+                    setActiveTab('sessions')
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upsell modal for locked principles (Non-subscriber) */}
+      {lockedPrinciple && (
+        <div className="fixed inset-0 z-[130]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close unlock"
+            onClick={() => setLockedPrinciple(null)}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white/95 backdrop-blur-xl shadow-2xl border border-white/60 overflow-hidden">
+              <div className="p-5 border-b border-gray-200/70 flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-lg font-bold text-gray-900">Unlock this principle</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Become a <span className="font-semibold">Subscriber</span> to access the full library.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl hover:bg-gray-100 text-gray-700 font-semibold"
+                  onClick={() => setLockedPrinciple(null)}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="p-5">
+                <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Principle</div>
+                  <div className="text-gray-900 font-semibold mt-1">
+                    {String(lockedPrinciple?.title || '—')}
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    {lockedPrinciple?.category ? String(lockedPrinciple.category) : ''}
+                  </div>
+                </div>
+
+                <div className="mt-5 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextUser = { ...user, role: 'Subscriber' }
+                      localStorage.setItem('stod_user', JSON.stringify(nextUser))
+                      onUpdateUser?.(nextUser)
+                      setLockedPrinciple(null)
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
+                  >
+                    Become Subscriber
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLockedPrinciple(null)}
+                    className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition"
+                  >
+                    Not now
+                  </button>
+                </div>
+
+                <div className="mt-4 text-xs text-gray-500">
+                  Note: this is a demo. “Become Subscriber” updates your local role in this browser.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

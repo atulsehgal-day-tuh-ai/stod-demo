@@ -6,6 +6,7 @@ import LoginForm from '@/components/LoginForm'
 import SignUpForm from '@/components/SignUpForm'
 import HowItWorks from '@/components/HowItWorks'
 import Dashboard from '@/components/Dashboard'
+import { normalizeRole } from '@/lib/roles'
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
@@ -18,7 +19,11 @@ export default function Home() {
     // Check if user is logged in
     const storedUser = localStorage.getItem('stod_user')
     if (storedUser) {
-      setUser(JSON.parse(storedUser))
+      const parsed = JSON.parse(storedUser)
+      const next = parsed && typeof parsed === 'object' ? { ...parsed, role: normalizeRole((parsed as any).role) } : parsed
+      setUser(next)
+      // Persist normalization so the rest of the app doesn’t see legacy roles
+      localStorage.setItem('stod_user', JSON.stringify(next))
       setShowLogin(false)
     }
     setLoading(false)

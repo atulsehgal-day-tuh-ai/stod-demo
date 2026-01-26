@@ -18,23 +18,8 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
 
   // Role-based pricing (credits required)
   const getSessionPrice = (basePrice: number) => {
-    if (!user || !user.role) return basePrice
-    if (user.role === 'Moderator' || user.role === 'Admin') {
-      return 0 // Free for Moderators and Admins
-    }
-    if (user.role === 'Contributor') {
-      return Math.floor(basePrice * 0.3) // 30% of base price
-    }
-    if (user.role === 'Practitioner') {
-      return Math.floor(basePrice * 0.5) // 50% of base price
-    }
-    if (user.role === 'Member') {
-      return Math.floor(basePrice * 0.7) // 70% of base price
-    }
-    if (user.role === 'Looker') {
-      return basePrice // 100% - pays the most
-    }
-    return basePrice
+    // Phase 1: everything open — sessions are included for all roles.
+    return 0
   }
 
   useEffect(() => {
@@ -297,12 +282,7 @@ export default function Sessions({ user, onCreditUpdate }: SessionsProps) {
   }
 
   const getRoleDiscount = () => {
-    if (!user || !user.role) return 'Loading...'
-    if (user.role === 'Moderator' || user.role === 'Admin') return 'FREE'
-    if (user.role === 'Contributor') return '70% OFF'
-    if (user.role === 'Practitioner') return '50% OFF'
-    if (user.role === 'Member') return '30% OFF'
-    return 'Full Price'
+    return 'Included'
   }
 
   return (

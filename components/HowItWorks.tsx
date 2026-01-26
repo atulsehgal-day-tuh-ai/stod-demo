@@ -8,8 +8,6 @@ import {
   FiEye,
   FiBook,
   FiLayers,
-  FiMessageSquare,
-  FiUpload,
   FiPlay,
   FiCalendar,
   FiZap,
@@ -129,7 +127,7 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                       Try this in 60 seconds
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      A quick path to value—start as a Looker and upgrade when you want more.
+                      A quick path to value—start as a Non-subscriber and upgrade when you want more.
                     </div>
                   </div>
                   <div className="hidden sm:block text-xs font-bold px-3 py-1 rounded-full bg-primary-50 border border-primary-100 text-primary-800">
@@ -155,13 +153,13 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
                     <div className="font-semibold text-gray-900">Save 1–2 principles</div>
                     <div className="text-gray-600 mt-1">
-                      Members can build a personal library so the best ideas are one click away.
+                      Subscribers can build a personal library so the best ideas are one click away.
                     </div>
                   </div>
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
                     <div className="font-semibold text-gray-900">Ask one “hard question”</div>
                     <div className="text-gray-600 mt-1">
-                      Practitioners unlock deeper prompts that turn reading into decision-making.
+                      Subscribers unlock deeper prompts that turn reading into decision-making.
                     </div>
                   </div>
                   <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
@@ -194,7 +192,7 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                       Videos
                     </div>
                     <div className="text-gray-600 mt-2">
-                      Learn the thinking behind the principles. Higher roles get better access and value.
+                      Learn the thinking behind the principles and see how they’re applied in the real world.
                     </div>
                   </div>
                   <div className="p-4 rounded-2xl bg-gradient-to-br from-white to-amber-50 border border-amber-100">
@@ -203,7 +201,7 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                       Sessions
                     </div>
                     <div className="text-gray-600 mt-2">
-                      Practice with the community. Discounts improve as you level up.
+                      Practice with the community. Included for everyone during Phase 1.
                     </div>
                   </div>
                 </div>
@@ -219,7 +217,7 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                 <div className="rounded-xl bg-primary-50 border border-primary-100 p-4 mb-4">
                   <div className="font-semibold text-gray-900 mb-1">Everyone is welcome</div>
                   <div className="text-gray-700">
-                    Start as a <span className="font-semibold">Looker</span> to explore. Upgrade when you’re ready for deeper tools, community access, and bigger benefits.
+                    Start as a <span className="font-semibold">Non-subscriber</span> to explore. Upgrade when you’re ready for subscriber benefits.
                   </div>
                 </div>
 
@@ -227,13 +225,13 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                   <div className="rounded-xl bg-white border border-gray-200 p-4 shadow-sm">
                     <div className="flex items-center gap-2 font-bold text-gray-900">
                       <FiEye />
-                      Looker (Basic)
+                      Non-subscriber
                     </div>
                     <div className="mt-2 text-gray-700">
                       <div className="font-semibold text-gray-900">Access</div>
                       <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Browse and read principles (read-only)</li>
-                        <li>Free preview of a small set; unlock more with credits</li>
+                        <li>Access everything during Phase 1</li>
+                        <li>Great for first-time exploration</li>
                       </ul>
                       <div className="mt-2 font-semibold text-gray-900">Best for</div>
                       <div>New visitors who want to learn the “Same Thing Only Different” approach.</div>
@@ -243,50 +241,16 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                   <div className="rounded-xl bg-white border border-gray-200 p-4 shadow-sm">
                     <div className="flex items-center gap-2 font-bold text-gray-900">
                       <FiBook />
-                      Member
+                      Subscriber
                     </div>
                     <div className="mt-2 text-gray-700">
                       <div className="font-semibold text-gray-900">Access</div>
                       <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Save principles and build your personal library</li>
-                        <li>Better pricing on sessions vs Looker</li>
+                        <li>Access everything during Phase 1</li>
+                        <li>Later: premium tools + community benefits</li>
                       </ul>
                       <div className="mt-2 font-semibold text-gray-900">Benefits of upgrading</div>
-                      <div>Track what matters to you and unlock more value faster.</div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-white border border-gray-200 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 font-bold text-gray-900">
-                      <FiMessageSquare />
-                      Practitioner
-                    </div>
-                    <div className="mt-2 text-gray-700">
-                      <div className="font-semibold text-gray-900">Access</div>
-                      <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Forums + community Q&amp;A</li>
-                        <li>Hard questions prompts + deeper learning tools</li>
-                        <li>Stronger discounts on sessions</li>
-                      </ul>
-                      <div className="mt-2 font-semibold text-gray-900">Benefits of upgrading</div>
-                      <div>Go from reading to applying—get feedback, examples, and practice loops.</div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-white border border-gray-200 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 font-bold text-gray-900">
-                      <FiUpload />
-                      Contributor
-                    </div>
-                    <div className="mt-2 text-gray-700">
-                      <div className="font-semibold text-gray-900">Access</div>
-                      <ul className="mt-1 list-disc list-inside space-y-1">
-                        <li>Submit new principles and improvements</li>
-                        <li>Advanced Reader tools (for deeper linking/annotation workflows)</li>
-                        <li>High discounts on sessions</li>
-                      </ul>
-                      <div className="mt-2 font-semibold text-gray-900">Benefits of upgrading</div>
-                      <div>Build reputation and earn rewards by contributing durable, reusable insight.</div>
+                      <div>Deeper learning loops, tools, and community participation as we tighten permissions.</div>
                     </div>
                   </div>
 
@@ -299,11 +263,10 @@ export default function HowItWorks({ onGoHome, onSignIn, onSignUp }: HowItWorksP
                       <div className="font-semibold text-gray-900">Access</div>
                       <ul className="mt-1 list-disc list-inside space-y-1">
                         <li>Review/curate submissions and approve community annotations</li>
-                        <li>Manage quality so the best principles rise to the top</li>
-                        <li>Best pricing on sessions (often free in this demo)</li>
+                        <li>Keep the library high-signal and consistent</li>
                       </ul>
-                      <div className="mt-2 font-semibold text-gray-900">Benefits of upgrading</div>
-                      <div>Shape the repository and earn curation-based benefits.</div>
+                      <div className="mt-2 font-semibold text-gray-900">Focus</div>
+                      <div>Quality control and curation workflows.</div>
                     </div>
                   </div>
 

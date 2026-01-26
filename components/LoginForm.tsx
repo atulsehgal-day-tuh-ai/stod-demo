@@ -42,53 +42,27 @@ export default function LoginForm({ onLogin, onGoHome, onGoSignUp }: LoginFormPr
     },
     { 
       id: 3, 
-      username: 'contributor', 
-      password: 'contributor123', 
-      role: 'Contributor', 
-      name: 'Alex Contributor',
-      email: 'architect@stod.com',
+      username: 'subscriber',
+      password: 'subscriber123',
+      role: 'Subscriber',
+      name: 'Sam Subscriber',
+      email: 'subscriber@stod.com',
       credits: 2500,
-      walletStatus: 'Accumulator',
+      walletStatus: 'Rechargeable',
       status: 'Active',
-      successfulSubmissions: 8,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     },
     { 
       id: 4, 
-      username: 'practitioner', 
-      password: 'practitioner123', 
-      role: 'Practitioner', 
-      name: 'Jordan Practitioner',
-      email: 'practitioner@stod.com',
-      credits: 1000,
-      walletStatus: 'Monthly Allowance',
-      status: 'Active',
-      createdAt: new Date().toISOString()
-    },
-    { 
-      id: 5, 
-      username: 'member', 
-      password: 'member123', 
-      role: 'Member', 
-      name: 'Morgan Member',
-      email: 'learner@stod.com',
-      credits: 100,
-      walletStatus: 'Rechargeable',
-      status: 'Active',
-      createdAt: new Date().toISOString()
-    },
-    { 
-      id: 6, 
-      username: 'looker', 
-      password: 'looker123', 
-      role: 'Looker', 
-      name: 'Taylor Looker',
-      email: 'seeker@stod.com',
-      phone: '123-456-7890',
+      username: 'non',
+      password: 'non123',
+      role: 'Non-subscriber',
+      name: 'Nina Non-subscriber',
+      email: 'nonsubscriber@stod.com',
       credits: 50,
       walletStatus: 'Starter',
       status: 'Active',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     },
   ]
 
@@ -112,10 +86,8 @@ export default function LoginForm({ onLogin, onGoHome, onGoSignUp }: LoginFormPr
     const colors: Record<string, string> = {
       'Admin': 'from-purple-500 to-purple-700',
       'Moderator': 'from-blue-500 to-blue-700',
-      'Contributor': 'from-green-500 to-green-700',
-      'Practitioner': 'from-orange-500 to-orange-700',
-      'Member': 'from-cyan-500 to-cyan-700',
-      'Looker': 'from-gray-400 to-gray-600',
+      'Subscriber': 'from-cyan-500 to-cyan-700',
+      'Non-subscriber': 'from-gray-400 to-gray-600',
     }
     return colors[role] || 'from-gray-400 to-gray-600'
   }

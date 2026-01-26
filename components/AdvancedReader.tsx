@@ -6,6 +6,34 @@ import { addAnnotation, loadAnnotations, type AnnotationSection, type PrincipleA
 
 type Principle = any
 
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightParts(text: string, query: string) {
+  const q = query.trim()
+  if (!q) return [text]
+  const re = new RegExp(`(${escapeRegExp(q)})`, 'ig')
+  return String(text).split(re)
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  const parts = highlightParts(text, query)
+  return (
+    <>
+      {parts.map((part, idx) =>
+        idx % 2 === 1 ? (
+          <mark key={idx} className="bg-yellow-200 text-gray-900 rounded px-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={idx}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function tokenize(s: string) {
   return s
     .toLowerCase()
@@ -49,14 +77,15 @@ export default function AdvancedReader({
   unlockPrice?: number
   onUnlockPrinciple?: (principle: any) => void
 }) {
-  const canReveal = ['Admin', 'Moderator', 'Contributor'].includes(user?.role || '')
+  // Phase 1: everyone can reveal and annotate.
+  const canReveal = true
 
   const [selectedId, setSelectedId] = useState<number | null>(initialPrincipleId ?? null)
   const [focus, setFocus] = useState<'overview' | 'full' | 'take-home' | 'questions'>('overview')
   const [revealContent, setRevealContent] = useState(false)
   const [videos, setVideos] = useState<any[]>([])
   const [sessions, setSessions] = useState<any[]>([])
-  const [search, setSearch] = useState('')
+  const [keywordQuery, setKeywordQuery] = useState('')
   const [showAnnotate, setShowAnnotate] = useState(false)
   const [annotationText, setAnnotationText] = useState('')
   const [annotationsVersion, setAnnotationsVersion] = useState(0)
@@ -172,12 +201,29 @@ export default function AdvancedReader({
 
   const focusTokens = useMemo(() => new Set(tokenize(`${selectedPrinciple?.title || ''} ${focusText}`)), [selectedPrinciple?.title, focusText])
 
-  const filteredPrincipleOptions = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    const list = (principles || []).slice()
-    if (!q) return list
-    return list.filter((p) => String(p.title || '').toLowerCase().includes(q) || String(p.category || '').toLowerCase().includes(q))
-  }, [principles, search])
+  const principleSearchBlob = useMemo(() => {
+    const p = selectedPrinciple
+    if (!p) return ''
+    const title = String(p.title || '')
+    const overview = String(p.description || '')
+    const full = String(p.fullText || p.chapterText || '')
+    const takeHome = String(p.takeHomeValue || '')
+    const qs = Array.isArray(p.hardQuestions) ? p.hardQuestions.join('\n') : ''
+    return `${title}\n${overview}\n${full}\n${takeHome}\n${qs}`
+  }, [selectedPrinciple])
+
+  const keywordMatchCount = useMemo(() => {
+    const q = keywordQuery.trim()
+    if (!q) return 0
+    const re = new RegExp(escapeRegExp(q), 'ig')
+    const m = principleSearchBlob.match(re)
+    return m ? m.length : 0
+  }, [keywordQuery, principleSearchBlob])
+
+  useEffect(() => {
+    // Keyword Search is scoped to the current principle; clear when switching principles.
+    setKeywordQuery('')
+  }, [selectedPrinciple?.id])
 
   const relatedVideos = useMemo(() => {
     const scored = (videos || []).map((v) => {
@@ -251,27 +297,39 @@ export default function AdvancedReader({
             <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
               <div className="flex-1">
                 <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Pick a principle</div>
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search principles…"
-                    className="w-full pl-10 pr-3 py-2 rounded-xl bg-white/90 border border-white/70 shadow-sm"
-                  />
-                </div>
-                <div className="mt-2">
+                <div>
                   <select
                     value={selectedPrinciple?.id ?? ''}
                     onChange={(e) => setSelectedId(Number(e.target.value))}
                     className="w-full px-3 py-2 rounded-xl bg-white/90 border border-white/70 shadow-sm text-gray-900"
                   >
-                    {filteredPrincipleOptions.map((p) => (
+                    {(principles || []).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.title} {p.category ? `— ${p.category}` : ''}
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Keyword Search</div>
+                  <div className="relative">
+                    <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      value={keywordQuery}
+                      onChange={(e) => setKeywordQuery(e.target.value)}
+                      placeholder="Search within this principle…"
+                      className="w-full pl-10 pr-3 py-2 rounded-xl bg-white/90 border border-white/70 shadow-sm"
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    Searches title, overview, full text, take-home, and questions.
+                    {keywordQuery.trim() ? (
+                      <>
+                        {' '}• <span className="font-semibold">{keywordMatchCount}</span> matches
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
@@ -366,18 +424,31 @@ export default function AdvancedReader({
                     style={{ filter: canReveal && revealContent ? 'none' : 'blur(10px)' }}
                   >
                     <div className="prose prose-slate max-w-none">
-                      {focus === 'overview' && <p className="whitespace-pre-wrap">{selectedPrinciple.description || '—'}</p>}
-                      {focus === 'full' && (
-                        <p className="whitespace-pre-wrap">{selectedPrinciple.fullText || selectedPrinciple.chapterText || '—'}</p>
+                      {focus === 'overview' && (
+                        <p className="whitespace-pre-wrap">
+                          <HighlightedText text={String(selectedPrinciple.description || '—')} query={keywordQuery} />
+                        </p>
                       )}
-                      {focus === 'take-home' && <p className="whitespace-pre-wrap">{selectedPrinciple.takeHomeValue || '—'}</p>}
+                      {focus === 'full' && (
+                        <p className="whitespace-pre-wrap">
+                          <HighlightedText
+                            text={String(selectedPrinciple.fullText || selectedPrinciple.chapterText || '—')}
+                            query={keywordQuery}
+                          />
+                        </p>
+                      )}
+                      {focus === 'take-home' && (
+                        <p className="whitespace-pre-wrap">
+                          <HighlightedText text={String(selectedPrinciple.takeHomeValue || '—')} query={keywordQuery} />
+                        </p>
+                      )}
                       {focus === 'questions' && (
                         <div className="space-y-2">
                           {(selectedPrinciple.hardQuestions || []).length > 0 ? (
                             (selectedPrinciple.hardQuestions || []).map((q: string, idx: number) => (
                               <div key={idx} className="p-3 rounded-xl bg-purple-50 border border-purple-100">
                                 <div className="font-semibold text-gray-900">
-                                  {idx + 1}. {q}
+                                  {idx + 1}. <HighlightedText text={String(q)} query={keywordQuery} />
                                 </div>
                               </div>
                             ))
