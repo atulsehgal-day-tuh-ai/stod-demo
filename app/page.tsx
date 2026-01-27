@@ -7,6 +7,7 @@ import SignUpForm from '@/components/SignUpForm'
 import HowItWorks from '@/components/HowItWorks'
 import Dashboard from '@/components/Dashboard'
 import { normalizeRole } from '@/lib/roles'
+import { ensureSeedStodUsers } from '@/lib/demoUsers'
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
@@ -16,6 +17,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Seed demo user directory for collaboration/invites (safe: won't overwrite if already on new role model)
+    ensureSeedStodUsers()
+
     // Check if user is logged in
     const storedUser = localStorage.getItem('stod_user')
     if (storedUser) {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { FiUser, FiEdit2, FiTrash2, FiPlus, FiShield, FiUsers } from 'react-icons/fi'
+import { DEMO_USERS_6 } from '@/lib/demoUsers'
 
 export default function UserManagement() {
   const [users, setUsers] = useState<any[]>([])
@@ -15,12 +16,14 @@ export default function UserManagement() {
       setUsers(JSON.parse(stored))
     } else {
       // Initialize with sample users
-      const sampleUsers = [
-        { id: 1, username: 'admin', name: 'Admin User', role: 'Administrator', email: 'admin@stod.com', status: 'Active' },
-        { id: 2, username: 'manager', name: 'Manager User', role: 'Manager', email: 'manager@stod.com', status: 'Active' },
-        { id: 3, username: 'editor', name: 'Editor User', role: 'Editor', email: 'editor@stod.com', status: 'Active' },
-        { id: 4, username: 'viewer', name: 'Viewer User', role: 'Viewer', email: 'viewer@stod.com', status: 'Active' },
-      ]
+      const sampleUsers = DEMO_USERS_6.map((u) => ({
+        id: u.id,
+        username: u.username,
+        name: u.name,
+        role: u.role,
+        email: u.email || `${u.username}@stod.demo`,
+        status: u.status || 'Active',
+      }))
       setUsers(sampleUsers)
       localStorage.setItem('stod_users', JSON.stringify(sampleUsers))
     }
@@ -28,13 +31,13 @@ export default function UserManagement() {
 
   const getRoleColor = (role: string) => {
     switch (role) {
-      case 'Administrator':
+      case 'Admin':
         return 'bg-purple-100 text-purple-700'
-      case 'Manager':
+      case 'Moderator':
         return 'bg-blue-100 text-blue-700'
-      case 'Editor':
-        return 'bg-green-100 text-green-700'
-      case 'Viewer':
+      case 'Subscriber':
+        return 'bg-cyan-100 text-cyan-700'
+      case 'Non-subscriber':
         return 'bg-gray-100 text-gray-700'
       default:
         return 'bg-gray-100 text-gray-700'
@@ -49,7 +52,7 @@ export default function UserManagement() {
     }
   }
 
-  const roles = ['Administrator', 'Manager', 'Editor', 'Viewer']
+  const roles = ['Admin', 'Moderator', 'Subscriber', 'Non-subscriber']
 
   return (
     <div>
@@ -78,20 +81,20 @@ export default function UserManagement() {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <div>
-            <span className="font-medium text-blue-900">Administrator:</span>
+            <span className="font-medium text-blue-900">Admin:</span>
             <p className="text-blue-700">Full access, user management</p>
           </div>
           <div>
-            <span className="font-medium text-blue-900">Manager:</span>
-            <p className="text-blue-700">Edit, delete principles</p>
+            <span className="font-medium text-blue-900">Moderator:</span>
+            <p className="text-blue-700">Review and validate submissions</p>
           </div>
           <div>
-            <span className="font-medium text-blue-900">Editor:</span>
-            <p className="text-blue-700">Create, edit principles</p>
+            <span className="font-medium text-blue-900">Subscriber:</span>
+            <p className="text-blue-700">Collaborate + full access (except admin-only)</p>
           </div>
           <div>
-            <span className="font-medium text-blue-900">Viewer:</span>
-            <p className="text-blue-700">Read-only access</p>
+            <span className="font-medium text-blue-900">Non-subscriber:</span>
+            <p className="text-blue-700">Limited access (locked tools/collaboration)</p>
           </div>
         </div>
       </div>
@@ -209,7 +212,7 @@ function UserModal({ user, roles, onSave, onClose }: any) {
     username: '',
     name: '',
     email: '',
-    role: 'Viewer',
+    role: 'Non-subscriber',
     status: 'Active',
   })
 
@@ -219,7 +222,7 @@ function UserModal({ user, roles, onSave, onClose }: any) {
         username: user.username || '',
         name: user.name || '',
         email: user.email || '',
-        role: user.role || 'Viewer',
+        role: user.role || 'Non-subscriber',
         status: user.status || 'Active',
       })
     }

@@ -198,8 +198,8 @@ export default function Collaborate({
                     <div className="mt-1 text-gray-900 font-semibold">{d.accessRequests.length}</div>
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-white p-3">
-                    <div className="font-bold text-gray-600 uppercase tracking-wider">PRs</div>
-                    <div className="mt-1 text-gray-900 font-semibold">{d.pullRequests.length}</div>
+                    <div className="font-bold text-gray-600 uppercase tracking-wider">Suggestions</div>
+                    <div className="mt-1 text-gray-900 font-semibold">{d.suggestions.length}</div>
                   </div>
                 </div>
               </div>
