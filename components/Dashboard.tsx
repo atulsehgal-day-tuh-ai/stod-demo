@@ -1127,7 +1127,16 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
           </>
         )}
 
-        {activeTab === 'saved' && <SavedPrinciples user={user} principles={principles} />}
+        {activeTab === 'saved' && (
+          <SavedPrinciples
+            user={user}
+            principles={principles}
+            onOpen={handleOpenReader}
+            onToggleFavourite={handleSave}
+            isLocked={(p) => isPrincipleLockedForUser(p)}
+            onUnlock={(p) => setLockedPrinciple(p)}
+          />
+        )}
         {activeTab === 'forums' && <Forums user={user} />}
         {activeTab === 'credits' && (
           <CreditsWallet
