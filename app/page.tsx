@@ -11,6 +11,7 @@ import { ensureSeedStodUsers } from '@/lib/demoUsers'
 
 export default function Home() {
   const [user, setUser] = useState<any>(null)
+  const [resumeUser, setResumeUser] = useState<any>(null)
   const [showLogin, setShowLogin] = useState(false)
   const [showSignUp, setShowSignUp] = useState(false)
   const [showHowItWorks, setShowHowItWorks] = useState(false)
@@ -25,7 +26,7 @@ export default function Home() {
     if (storedUser) {
       const parsed = JSON.parse(storedUser)
       const next = parsed && typeof parsed === 'object' ? { ...parsed, role: normalizeRole((parsed as any).role) } : parsed
-      setUser(next)
+      setResumeUser(next)
       // Persist normalization so the rest of the app doesn’t see legacy roles
       localStorage.setItem('stod_user', JSON.stringify(next))
       setShowLogin(false)
@@ -53,13 +54,15 @@ export default function Home() {
 
   const handleLogin = (userData: any) => {
     setUser(userData)
+    setResumeUser(userData)
     localStorage.setItem('stod_user', JSON.stringify(userData))
     setShowLogin(false)
   }
 
   const handleLogout = () => {
     setUser(null)
-    setShowLogin(true) // Show login screen after logout
+    setResumeUser(null)
+    setShowLogin(false) // Return to Home after logout
     setShowSignUp(false)
     setShowHowItWorks(false)
     localStorage.removeItem('stod_user')
@@ -118,6 +121,18 @@ export default function Home() {
           onGetStarted={handleGetStarted}
           onSignUp={handleSignUp}
           onHowItWorks={handleHowItWorks}
+          resumeUser={resumeUser}
+          onContinue={() => {
+            if (!resumeUser) return
+            setUser(resumeUser)
+            setShowLogin(false)
+            setShowSignUp(false)
+            setShowHowItWorks(false)
+          }}
+          onForgetUser={() => {
+            setResumeUser(null)
+            localStorage.removeItem('stod_user')
+          }}
         />
       )}
     </main>

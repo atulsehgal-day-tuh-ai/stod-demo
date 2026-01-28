@@ -7,6 +7,9 @@ interface LandingPageProps {
   onGetStarted: () => void
   onSignUp: () => void
   onHowItWorks: () => void
+  resumeUser?: any | null
+  onContinue?: () => void
+  onForgetUser?: () => void
 }
 
 const testimonials = [
@@ -50,7 +53,7 @@ const featuredPrinciples = [
   },
 ]
 
-export default function LandingPage({ onGetStarted, onSignUp, onHowItWorks }: LandingPageProps) {
+export default function LandingPage({ onGetStarted, onSignUp, onHowItWorks, resumeUser, onContinue, onForgetUser }: LandingPageProps) {
   const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState(0)
   const [featuredFade, setFeaturedFade] = useState(false)
 
@@ -142,10 +145,13 @@ export default function LandingPage({ onGetStarted, onSignUp, onHowItWorks }: La
               Sign Up
             </button>
             <button
-              onClick={onGetStarted}
+              onClick={() => {
+                if (resumeUser && onContinue) return onContinue()
+                onGetStarted()
+              }}
               className="bg-gradient-to-r from-primary-600/90 to-primary-700/90 hover:from-primary-700 hover:to-primary-800 backdrop-blur-md text-white font-bold py-2 px-4 rounded-lg transition-all border border-white/40 shadow-lg shadow-black/25 hover:border-white/70"
             >
-              Sign In
+              {resumeUser ? `Continue as ${String(resumeUser?.name || 'User')}` : 'Sign In'}
             </button>
           </div>
         </div>
@@ -176,6 +182,32 @@ export default function LandingPage({ onGetStarted, onSignUp, onHowItWorks }: La
                     <span className="text-2xl md:text-3xl font-bold italic text-white">Same Things</span> that have worked for us in the past with{' '}
                     <span className="text-2xl md:text-3xl font-bold italic text-white">Only Different</span> element that renders a novel powerful solution.
                   </div>
+
+                  {resumeUser && (
+                    <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onContinue?.()}
+                        className="w-full sm:w-auto bg-white/15 hover:bg-white/22 backdrop-blur-md text-white font-bold py-3 px-5 rounded-xl transition-all border border-white/40 shadow-lg shadow-black/25"
+                      >
+                        Continue as {String(resumeUser?.name || 'User')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onGetStarted}
+                        className="w-full sm:w-auto bg-white/10 hover:bg-white/18 backdrop-blur-md text-white font-semibold py-3 px-5 rounded-xl transition-all border border-white/35 shadow-lg shadow-black/20"
+                      >
+                        Sign in as someone else
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onForgetUser?.()}
+                        className="w-full sm:w-auto text-white/85 hover:text-white font-semibold underline underline-offset-4"
+                      >
+                        Not you?
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
