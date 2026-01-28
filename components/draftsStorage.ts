@@ -1,5 +1,7 @@
 'use client'
 
+import { addNotification } from './notificationsStorage'
+
 export type DraftStatus = 'Draft' | 'Collaborating' | 'ReadyToSubmit' | 'SubmittedForReview' | 'Archived'
 
 export type DraftFieldKey = 'title' | 'category' | 'description' | 'takeHomeValue' | 'fullText' | 'hardQuestions'
@@ -11,6 +13,15 @@ export type DraftFields = {
   takeHomeValue: string
   fullText: string
   hardQuestions: string[]
+}
+
+export type DraftVersion = {
+  id: number
+  at: string
+  actorId: number
+  actorName: string
+  summary: string
+  fields: DraftFields
 }
 
 export type SuggestionStatus = 'Open' | 'Applied' | 'Declined'
@@ -32,6 +43,7 @@ export type DraftSuggestion = {
   authorId: number
   authorName: string
   createdAt: string
+  comments?: SuggestionComment[]
   reviewedAt?: string
   reviewedById?: number
   reviewedByName?: string
@@ -39,6 +51,14 @@ export type DraftSuggestion = {
   appliedAt?: string
   appliedById?: number
   appliedByName?: string
+}
+
+export type SuggestionComment = {
+  id: number
+  at: string
+  authorId: number
+  authorName: string
+  body: string
 }
 
 export type ActivityLogEntry =
@@ -53,7 +73,17 @@ export type ActivityLogEntry =
     }
   | {
       id: number
-      type: 'SuggestionCreated' | 'SuggestionReviewed' | 'SuggestionApplied' | 'SuggestionDeclined'
+      type: 'StageTransition'
+      at: string
+      actorId: number
+      actorName: string
+      summary: string
+      fromStatus: DraftStatus
+      toStatus: DraftStatus
+    }
+  | {
+      id: number
+      type: 'SuggestionCreated' | 'SuggestionReviewed' | 'SuggestionApplied' | 'SuggestionDeclined' | 'SuggestionCommented'
       at: string
       actorId: number
       actorName: string
@@ -79,6 +109,8 @@ export type DraftPrinciple = {
 
   suggestions: DraftSuggestion[]
   activityLog: ActivityLogEntry[]
+  watchers?: number[] // userIds who watch this draft for notifications
+  versions?: DraftVersion[]
 
   archivedAt?: string
 
@@ -97,6 +129,44 @@ function makeId(): number {
   return Date.now() + Math.floor(Math.random() * 1000)
 }
 
+function titleForDraft(d: DraftPrinciple | null | undefined): string {
+  return d?.fields?.title ? String(d.fields.title) : 'Untitled draft'
+}
+
+function uniqueNumbers(list: number[]): number[] {
+  const out: number[] = []
+  const seen = new Set<number>()
+  for (const x of list) {
+    const n = Number(x)
+    if (!Number.isFinite(n) || n <= 0) continue
+    if (seen.has(n)) continue
+    seen.add(n)
+    out.push(n)
+  }
+  return out
+}
+
+function notifyUsers(userIds: number[], input: { kind: any; at?: string; draft?: DraftPrinciple | null; actor?: { id: number; name: string }; message: string }) {
+  const ids = uniqueNumbers(userIds)
+  for (const uid of ids) {
+    addNotification(uid, {
+      kind: input.kind,
+      at: input.at || new Date().toISOString(),
+      draftId: input.draft?.id,
+      draftTitle: input.draft ? titleForDraft(input.draft) : undefined,
+      actorId: input.actor?.id,
+      actorName: input.actor?.name,
+      message: input.message,
+    })
+  }
+}
+
+function watchersForDraft(d: DraftPrinciple): number[] {
+  const base = Array.isArray(d.watchers) ? d.watchers : []
+  const mustInclude = [Number(d.ownerId)]
+  return uniqueNumbers([...base, ...mustInclude])
+}
+
 function dedupeActivity(entries: ActivityLogEntry[]): ActivityLogEntry[] {
   const seen = new Set<string>()
   const out: ActivityLogEntry[] = []
@@ -104,6 +174,8 @@ function dedupeActivity(entries: ActivityLogEntry[]): ActivityLogEntry[] {
     const k =
       e.type === 'OwnerEdit'
         ? `${e.type}:${e.at}:${e.actorId}:${e.changedFields.join(',')}:${e.summary}`
+        : e.type === 'StageTransition'
+          ? `${e.type}:${e.at}:${e.actorId}:${e.fromStatus}:${e.toStatus}:${e.summary}`
         : `${e.type}:${e.at}:${e.actorId}:${e.suggestionId}:${e.summary}`
     if (seen.has(k)) continue
     seen.add(k)
@@ -239,6 +311,8 @@ function migrateDraft(raw: any): DraftPrinciple | null {
     accessRequests: Array.isArray(base?.accessRequests) ? base.accessRequests.map(toNumber).filter((n: number) => n) : [],
     suggestions,
     activityLog,
+    watchers: Array.isArray(base?.watchers) ? base.watchers.map(toNumber).filter((n: number) => n) : [],
+    versions: Array.isArray(base?.versions) ? (base.versions as any) : [],
     archivedAt: base?.archivedAt ? String(base.archivedAt) : undefined,
     createdAt: String(base?.createdAt || now),
     updatedAt: String(base?.updatedAt || now),
@@ -246,6 +320,24 @@ function migrateDraft(raw: any): DraftPrinciple | null {
 
   // Ensure owner has access
   if (draft.ownerId && !draft.collaborators.includes(draft.ownerId)) draft.collaborators.unshift(draft.ownerId)
+  // Ensure owner watches by default
+  if (draft.ownerId) {
+    const w = watchersForDraft(draft)
+    draft.watchers = w
+  }
+  // Ensure versions exists (minimum initial snapshot)
+  if (!Array.isArray(draft.versions) || draft.versions.length === 0) {
+    draft.versions = [
+      {
+        id: makeId(),
+        at: String(draft.createdAt || now),
+        actorId: Number(draft.ownerId),
+        actorName: String(draft.ownerName || 'Owner'),
+        summary: 'Initial draft',
+        fields: draft.fields,
+      },
+    ]
+  }
 
   return draft
 }
@@ -301,6 +393,24 @@ export function createDraft(owner: { id: number; name: string }, fields?: Partia
     accessRequests: [],
     suggestions: [],
     activityLog: [],
+    watchers: [Number(owner.id)],
+    versions: [
+      {
+        id: makeId(),
+        at: now,
+        actorId: Number(owner.id),
+        actorName: String(owner.name || 'Owner'),
+        summary: 'Initial draft',
+        fields: {
+          title: fields?.title || '',
+          category: fields?.category || '',
+          description: fields?.description || '',
+          takeHomeValue: fields?.takeHomeValue || '',
+          fullText: fields?.fullText || '',
+          hardQuestions: Array.isArray(fields?.hardQuestions) ? fields!.hardQuestions : [],
+        },
+      },
+    ],
     archivedAt: undefined,
     createdAt: now,
     updatedAt: now,
@@ -322,7 +432,16 @@ export function requestDraftAccess(draftId: number, userId: number) {
   if (!d) return null
   if (d.collaborators.includes(userId)) return d
   if (d.accessRequests.includes(userId)) return d
-  return updateDraft(draftId, { accessRequests: [...d.accessRequests, userId] })
+  const next = updateDraft(draftId, { accessRequests: [...d.accessRequests, userId] })
+  if (next) {
+    notifyUsers([Number(d.ownerId)], {
+      kind: 'AccessRequested',
+      draft: next,
+      actor: { id: Number(userId), name: `User ${userId}` },
+      message: `Access requested for “${titleForDraft(next)}”.`,
+    })
+  }
+  return next
 }
 
 export function inviteCollaborator(draftId: number, userId: number) {
@@ -330,30 +449,77 @@ export function inviteCollaborator(draftId: number, userId: number) {
   if (!d) return null
   if (d.collaborators.includes(userId)) return d
   if (d.invites.includes(userId)) return d
-  return updateDraft(draftId, { invites: [...d.invites, userId] })
+  const next = updateDraft(draftId, { invites: [...d.invites, userId] })
+  if (next) {
+    notifyUsers([Number(userId)], {
+      kind: 'InviteReceived',
+      draft: next,
+      actor: { id: Number(d.ownerId), name: String(d.ownerName || 'Owner') },
+      message: `You were invited to collaborate on “${titleForDraft(next)}”.`,
+    })
+  }
+  return next
 }
 
 export function revokeInvite(draftId: number, userId: number) {
   const d = getDraftById(draftId)
   if (!d) return null
-  return updateDraft(draftId, { invites: d.invites.filter((id) => id !== userId) })
+  const next = updateDraft(draftId, { invites: d.invites.filter((id) => id !== userId) })
+  if (next) {
+    notifyUsers([Number(userId)], {
+      kind: 'InviteRevoked',
+      draft: next,
+      actor: { id: Number(d.ownerId), name: String(d.ownerName || 'Owner') },
+      message: `Your invite was revoked for “${titleForDraft(next)}”.`,
+    })
+  }
+  return next
 }
 
-export function approveAccessRequest(draftId: number, userId: number) {
+export function approveAccessRequest(draftId: number, userId: number, actor?: { id: number; name: string }) {
   const d = getDraftById(draftId)
   if (!d) return null
   const nextCollaborators = Array.from(new Set([...d.collaborators, userId]))
-  return updateDraft(draftId, {
+  const next = updateDraft(draftId, {
     collaborators: nextCollaborators,
     invites: d.invites.filter((id) => id !== userId),
     accessRequests: d.accessRequests.filter((id) => id !== userId),
+    watchers: uniqueNumbers([...(Array.isArray(d.watchers) ? d.watchers : []), Number(d.ownerId), Number(userId)]),
   })
+  if (next) {
+    // If actor is the invited user accepting, notify owner; otherwise notify the user that access was approved.
+    if (actor && Number(actor.id) === Number(userId)) {
+      notifyUsers([Number(d.ownerId)], {
+        kind: 'AccessApproved',
+        draft: next,
+        actor,
+        message: `${String(actor.name || 'A collaborator')} accepted the invite for “${titleForDraft(next)}”.`,
+      })
+    } else {
+      notifyUsers([Number(userId)], {
+        kind: 'AccessApproved',
+        draft: next,
+        actor: { id: Number(d.ownerId), name: String(d.ownerName || 'Owner') },
+        message: `You now have access to collaborate on “${titleForDraft(next)}”.`,
+      })
+    }
+  }
+  return next
 }
 
-export function denyAccessRequest(draftId: number, userId: number) {
+export function denyAccessRequest(draftId: number, userId: number, actor?: { id: number; name: string }) {
   const d = getDraftById(draftId)
   if (!d) return null
-  return updateDraft(draftId, { accessRequests: d.accessRequests.filter((id) => id !== userId) })
+  const next = updateDraft(draftId, { accessRequests: d.accessRequests.filter((id) => id !== userId) })
+  if (next) {
+    notifyUsers([Number(userId)], {
+      kind: 'AccessDenied',
+      draft: next,
+      actor: actor || { id: Number(d.ownerId), name: String(d.ownerName || 'Owner') },
+      message: `Access request denied for “${titleForDraft(next)}”.`,
+    })
+  }
+  return next
 }
 
 export function createSuggestion(input: {
@@ -377,6 +543,7 @@ export function createSuggestion(input: {
     authorId: Number(input.authorId),
     authorName: String(input.authorName || ''),
     createdAt: new Date().toISOString(),
+    comments: [],
   }
   const createdAt = s.createdAt
   const activity: ActivityLogEntry = {
@@ -388,7 +555,17 @@ export function createSuggestion(input: {
     summary: `Suggestion created: ${String((s.patch as any)?.field || 'field')}`,
     suggestionId: Number(s.id),
   }
-  return updateDraft(input.draftId, { suggestions: [s, ...d.suggestions], activityLog: [activity, ...(d.activityLog || [])] })
+  const next = updateDraft(input.draftId, { suggestions: [s, ...d.suggestions], activityLog: [activity, ...(d.activityLog || [])] })
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(s.authorId))
+    notifyUsers(watchers, {
+      kind: 'SuggestionCreated',
+      draft: next,
+      actor: { id: Number(s.authorId), name: String(s.authorName || 'Collaborator') },
+      message: `New suggestion on ${String((s.patch as any)?.field || 'field')}.`,
+    })
+  }
+  return next
 }
 
 export function applySuggestion(
@@ -445,11 +622,34 @@ export function applySuggestion(
     suggestionId: Number(suggestionId),
   }
 
-  return updateDraft(draftId, {
+  const nextVersion: DraftVersion = {
+    id: makeId(),
+    at: now,
+    actorId: Number(appliedBy.id),
+    actorName: String(appliedBy.name || 'Owner'),
+    summary,
+    fields: nextFields,
+  }
+
+  const next = updateDraft(draftId, {
     fields: nextFields,
     suggestions: nextSuggestions,
     activityLog: [appliedEntry, reviewEntry, ...(d.activityLog || [])],
+    versions: [nextVersion, ...((d.versions || []) as any)],
   })
+
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(appliedBy.id))
+    // Notify suggestion author and watchers.
+    notifyUsers(uniqueNumbers([Number(s.authorId), ...watchers]), {
+      kind: 'SuggestionApplied',
+      draft: next,
+      actor: { id: Number(appliedBy.id), name: String(appliedBy.name || 'Owner') },
+      message: summary,
+    })
+  }
+
+  return next
 }
 
 export function declineSuggestion(
@@ -501,13 +701,91 @@ export function declineSuggestion(
     suggestionId: Number(suggestionId),
   }
 
-  return updateDraft(draftId, { suggestions: nextSuggestions, activityLog: [declinedEntry, reviewEntry, ...(d.activityLog || [])] })
+  const next = updateDraft(draftId, { suggestions: nextSuggestions, activityLog: [declinedEntry, reviewEntry, ...(d.activityLog || [])] })
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(declinedBy.id))
+    notifyUsers(uniqueNumbers([Number(s.authorId), ...watchers]), {
+      kind: 'SuggestionDeclined',
+      draft: next,
+      actor: { id: Number(declinedBy.id), name: String(declinedBy.name || 'Owner') },
+      message: `Declined: ${String((s.patch as any)?.field || 'field')} (from ${s.authorName})`,
+    })
+  }
+  return next
 }
 
-export function submitDraftForModeratorReview(draftId: number) {
+export function submitDraftForModeratorReview(draftId: number, actor?: { id: number; name: string }) {
   const d = getDraftById(draftId)
   if (!d) return null
-  return updateDraft(draftId, { status: 'SubmittedForReview' })
+  const next = updateDraft(draftId, { status: 'SubmittedForReview' })
+  if (!next) return next
+
+  const effectiveActor = actor || { id: Number(d.ownerId), name: String(d.ownerName || 'Owner') }
+  if (Number(effectiveActor.id) !== Number(d.ownerId)) return next
+
+  const now = new Date().toISOString()
+  const entry: ActivityLogEntry = {
+    id: makeId(),
+    type: 'StageTransition',
+    at: now,
+    actorId: Number(effectiveActor.id),
+    actorName: String(effectiveActor.name || 'Owner'),
+    summary: `Stage changed: ${d.status} → SubmittedForReview`,
+    fromStatus: d.status,
+    toStatus: 'SubmittedForReview',
+  }
+
+  const updated = updateDraft(draftId, { activityLog: [entry, ...(d.activityLog || [])] })
+  if (updated) {
+    const watchers = watchersForDraft(updated).filter((id) => Number(id) !== Number(effectiveActor.id))
+    notifyUsers(watchers, {
+      kind: 'DraftSubmitted',
+      draft: updated,
+      actor: { id: Number(effectiveActor.id), name: String(effectiveActor.name || 'Owner') },
+      message: `Draft submitted for Moderator review.`,
+    })
+  }
+  return updated
+}
+
+export function promoteDraftStatus(input: {
+  draftId: number
+  actor: { id: number; name: string }
+  toStatus: DraftStatus
+}) {
+  const d = getDraftById(input.draftId)
+  if (!d) return null
+  if (Number(input.actor.id) !== Number(d.ownerId)) return d
+  if (String(d.status) === 'SubmittedForReview') return d
+  if (String(d.status) === 'Archived') return d
+
+  const from = d.status
+  const to = input.toStatus
+  if (from === to) return d
+
+  const now = new Date().toISOString()
+  const entry: ActivityLogEntry = {
+    id: makeId(),
+    type: 'StageTransition',
+    at: now,
+    actorId: Number(input.actor.id),
+    actorName: String(input.actor.name || 'Owner'),
+    summary: `Stage changed: ${from} → ${to}`,
+    fromStatus: from,
+    toStatus: to,
+  }
+
+  const next = updateDraft(input.draftId, { status: to, activityLog: [entry, ...(d.activityLog || [])] })
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(input.actor.id))
+    notifyUsers(watchers, {
+      kind: 'StageTransition',
+      draft: next,
+      actor: input.actor,
+      message: `Stage changed: ${from} → ${to}`,
+    })
+  }
+  return next
 }
 
 export function ownerUpdateDraftFields(input: {
@@ -547,9 +825,29 @@ export function ownerUpdateDraftFields(input: {
       changedFields: changed,
     }
     nextDraftPatch.activityLog = [entry, ...(d.activityLog || [])]
+
+    const version: DraftVersion = {
+      id: makeId(),
+      at: now,
+      actorId: Number(input.owner.id),
+      actorName: String(input.owner.name || 'Owner'),
+      summary: `Owner edited: ${changed.join(', ')}`,
+      fields: input.nextFields,
+    }
+    nextDraftPatch.versions = [version, ...((d.versions || []) as any)]
   }
 
-  return updateDraft(input.draftId, nextDraftPatch)
+  const next = updateDraft(input.draftId, nextDraftPatch)
+  if (next && changed.length > 0) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(input.owner.id))
+    notifyUsers(watchers, {
+      kind: 'OwnerEdit',
+      draft: next,
+      actor: input.owner,
+      message: `Owner edited: ${changed.join(', ')}`,
+    })
+  }
+  return next
 }
 
 function isLockedForReview(d: DraftPrinciple): boolean {
@@ -573,6 +871,109 @@ export function restoreDraft(draftId: number, actor: { id: number; name: string 
   if (isLockedForReview(d)) return d
   if (String(d.status) !== 'Archived') return d
   return updateDraft(draftId, { status: 'Draft', archivedAt: undefined })
+}
+
+export function toggleWatchDraft(draftId: number, userId: number) {
+  const d = getDraftById(draftId)
+  if (!d) return null
+  const watchers = watchersForDraft(d)
+  const uid = Number(userId)
+  const nextWatchers = watchers.includes(uid) ? watchers.filter((x) => Number(x) !== uid) : uniqueNumbers([uid, ...watchers])
+  return updateDraft(draftId, { watchers: nextWatchers })
+}
+
+export function addSuggestionComment(input: { draftId: number; suggestionId: number; authorId: number; authorName: string; body: string }) {
+  const d = getDraftById(input.draftId)
+  if (!d) return null
+  if (!d.collaborators.includes(Number(input.authorId))) return d
+  const s = d.suggestions.find((x) => x.id === input.suggestionId)
+  if (!s) return d
+
+  const now = new Date().toISOString()
+  const comment: SuggestionComment = {
+    id: makeId(),
+    at: now,
+    authorId: Number(input.authorId),
+    authorName: String(input.authorName || ''),
+    body: String(input.body || '').trim(),
+  }
+  if (!comment.body) return d
+
+  const nextSuggestions = d.suggestions.map((x) =>
+    x.id === input.suggestionId ? { ...x, comments: [comment, ...(Array.isArray(x.comments) ? x.comments : [])] } : x
+  )
+
+  const activity: ActivityLogEntry = {
+    id: makeId(),
+    type: 'SuggestionCommented',
+    at: now,
+    actorId: Number(comment.authorId),
+    actorName: String(comment.authorName || 'Collaborator'),
+    summary: `Commented on suggestion: ${String((s.patch as any)?.field || 'field')}`,
+    suggestionId: Number(input.suggestionId),
+  }
+
+  const next = updateDraft(input.draftId, { suggestions: nextSuggestions, activityLog: [activity, ...(d.activityLog || [])] })
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(comment.authorId))
+    notifyUsers(watchers, {
+      kind: 'SuggestionCommented',
+      draft: next,
+      actor: { id: Number(comment.authorId), name: String(comment.authorName || 'Collaborator') },
+      message: `New comment on suggestion ${String((s.patch as any)?.field || 'field')}.`,
+    })
+  }
+  return next
+}
+
+export function restoreDraftVersion(input: { draftId: number; owner: { id: number; name: string }; versionId: number }) {
+  const d = getDraftById(input.draftId)
+  if (!d) return null
+  if (Number(input.owner.id) !== Number(d.ownerId)) return d
+  if (String(d.status) === 'SubmittedForReview') return d
+
+  const versions = Array.isArray(d.versions) ? d.versions : []
+  const v = versions.find((x) => Number((x as any).id) === Number(input.versionId)) as any
+  if (!v?.fields) return d
+
+  const nextFields = v.fields as DraftFields
+  const now = new Date().toISOString()
+  const entry: ActivityLogEntry = {
+    id: makeId(),
+    type: 'OwnerEdit',
+    at: now,
+    actorId: Number(input.owner.id),
+    actorName: String(input.owner.name || 'Owner'),
+    summary: `Owner restored a previous version: ${String(v.summary || '')}`.trim(),
+    changedFields: ['title', 'category', 'description', 'takeHomeValue', 'fullText', 'hardQuestions'],
+  }
+  const nextVersion: DraftVersion = {
+    id: makeId(),
+    at: now,
+    actorId: Number(input.owner.id),
+    actorName: String(input.owner.name || 'Owner'),
+    summary: `Restored: ${String(v.summary || 'Previous version')}`,
+    fields: nextFields,
+  }
+
+  const next = updateDraft(input.draftId, {
+    fields: nextFields,
+    lastOwnerSnapshot: nextFields,
+    activityLog: [entry, ...(d.activityLog || [])],
+    versions: [nextVersion, ...versions],
+  })
+
+  if (next) {
+    const watchers = watchersForDraft(next).filter((id) => Number(id) !== Number(input.owner.id))
+    notifyUsers(watchers, {
+      kind: 'OwnerEdit',
+      draft: next,
+      actor: input.owner,
+      message: `Owner restored a previous version.`,
+    })
+  }
+
+  return next
 }
 
 export function deleteDraft(draftId: number, actor: { id: number; name: string }) {

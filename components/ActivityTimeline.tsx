@@ -1,12 +1,14 @@
 'use client'
 
 import { useMemo } from 'react'
-import { FiEdit2, FiMessageSquare, FiCheckCircle, FiXCircle, FiEye } from 'react-icons/fi'
+import { FiEdit2, FiMessageSquare, FiCheckCircle, FiXCircle, FiEye, FiShuffle } from 'react-icons/fi'
 import type { ActivityLogEntry, DraftPrinciple } from './draftsStorage'
 
 function iconFor(type: ActivityLogEntry['type']) {
   if (type === 'OwnerEdit') return FiEdit2
+  if (type === 'StageTransition') return FiShuffle
   if (type === 'SuggestionCreated') return FiMessageSquare
+  if (type === 'SuggestionCommented') return FiMessageSquare
   if (type === 'SuggestionApplied') return FiCheckCircle
   if (type === 'SuggestionDeclined') return FiXCircle
   return FiEye
@@ -14,9 +16,11 @@ function iconFor(type: ActivityLogEntry['type']) {
 
 function badgeClasses(type: ActivityLogEntry['type']) {
   if (type === 'OwnerEdit') return 'bg-blue-50 text-blue-700 border-blue-200'
+  if (type === 'StageTransition') return 'bg-purple-50 text-purple-700 border-purple-200'
   if (type === 'SuggestionApplied') return 'bg-green-50 text-green-700 border-green-200'
   if (type === 'SuggestionDeclined') return 'bg-red-50 text-red-700 border-red-200'
   if (type === 'SuggestionCreated') return 'bg-yellow-50 text-yellow-800 border-yellow-200'
+  if (type === 'SuggestionCommented') return 'bg-yellow-50 text-yellow-800 border-yellow-200'
   return 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
@@ -24,21 +28,25 @@ export default function ActivityTimeline({
   draft,
   selectedSuggestionId,
   onSelectSuggestion,
+  maxItems = 50,
+  className = '',
 }: {
   draft: DraftPrinciple
   selectedSuggestionId: number | null
   onSelectSuggestion?: (suggestionId: number) => void
+  maxItems?: number
+  className?: string
 }) {
   const items = useMemo(() => {
     const list = Array.isArray(draft.activityLog) ? draft.activityLog : []
     return list
       .slice()
       .sort((a, b) => String(b.at).localeCompare(String(a.at)))
-      .slice(0, 50)
-  }, [draft.activityLog])
+      .slice(0, maxItems)
+  }, [draft.activityLog, maxItems])
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+    <div className={`rounded-2xl border border-gray-200 bg-white p-5 ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-bold text-gray-900">Activity timeline</div>
@@ -53,7 +61,12 @@ export default function ActivityTimeline({
         ) : (
           items.map((e) => {
             const Icon = iconFor(e.type)
-            const isSuggestionEvent = e.type !== 'OwnerEdit'
+            const isSuggestionEvent =
+              e.type === 'SuggestionCreated' ||
+              e.type === 'SuggestionReviewed' ||
+              e.type === 'SuggestionApplied' ||
+              e.type === 'SuggestionDeclined' ||
+              e.type === 'SuggestionCommented'
             const sid = isSuggestionEvent ? (e as any).suggestionId : null
             const active = sid != null && selectedSuggestionId != null && Number(sid) === Number(selectedSuggestionId)
 
@@ -92,7 +105,7 @@ export default function ActivityTimeline({
                     </div>
                   </div>
                   <div className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold border ${badgeClasses(e.type)}`}>
-                    {e.type === 'OwnerEdit' ? 'Owner edit' : 'Suggestion'}
+                    {e.type === 'OwnerEdit' ? 'Owner edit' : e.type === 'StageTransition' ? 'Stage change' : 'Suggestion'}
                   </div>
                 </div>
               </div>

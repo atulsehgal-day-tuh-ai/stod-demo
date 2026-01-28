@@ -1,6 +1,7 @@
 'use client'
 
-import { FiEdit2, FiTrash2, FiEye, FiTag, FiClock, FiUser, FiSave, FiStar, FiHelpCircle, FiLock } from 'react-icons/fi'
+import { useState } from 'react'
+import { FiEdit2, FiTrash2, FiEye, FiTag, FiClock, FiUser, FiSave, FiStar, FiHelpCircle, FiLock, FiMoreVertical } from 'react-icons/fi'
 
 interface PrincipleCardProps {
   principle: any
@@ -9,6 +10,7 @@ interface PrincipleCardProps {
   onSave?: (id: number) => void
   onOpen?: (principle: any) => void
   onUnlock?: (principle: any) => void
+  onNotInterested?: (id: number) => void
   isLocked?: boolean
   unlockPrice?: number
   user?: any
@@ -22,6 +24,7 @@ export default function PrincipleCard({
   onSave,
   onOpen,
   onUnlock,
+  onNotInterested,
   isLocked,
   unlockPrice,
   user,
@@ -70,6 +73,7 @@ export default function PrincipleCard({
   const isSaved = user && principle.savedBy && principle.savedBy.includes(user.id)
   const isFeatured = principle.featured
   const isMostLiked = principle.mostLiked
+  const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <div
@@ -202,14 +206,14 @@ export default function PrincipleCard({
                 onSave(principle.id)
               }}
               disabled={!!isLocked}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
+              className={`flex-1 flex items-center justify-start gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
                 isSaved
                   ? 'bg-primary-100 text-primary-700 hover:bg-primary-200'
                   : 'bg-white/60 hover:bg-white/80 backdrop-blur-sm text-gray-700'
               }`}
             >
               <FiSave className={isSaved ? 'fill-current' : ''} />
-              {isSaved ? 'Saved' : 'Save'}
+              {isSaved ? 'In Favourites' : 'Add to Favourites'}
             </button>
           )}
           {canEdit && onEdit && (
@@ -236,6 +240,40 @@ export default function PrincipleCard({
             >
               <FiTrash2 />
             </button>
+          )}
+          {onNotInterested && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenuOpen((v) => !v)
+                }}
+                className="flex items-center justify-center px-3 py-2 bg-white/60 hover:bg-white/80 backdrop-blur-sm text-gray-700 rounded-lg transition text-sm font-medium"
+                aria-label="More actions"
+              >
+                <FiMoreVertical />
+              </button>
+
+              {menuOpen && (
+                <div
+                  className="absolute right-0 bottom-12 w-44 bg-white rounded-xl border border-gray-200 shadow-xl overflow-hidden z-20"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3 text-sm text-gray-800 hover:bg-gray-50"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setMenuOpen(false)
+                      onNotInterested(principle.id)
+                    }}
+                  >
+                    Not interested
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {!canEdit && !canSave && (
             <button

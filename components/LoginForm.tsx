@@ -141,7 +141,7 @@ export default function LoginForm({ onLogin, onGoHome, onGoSignUp }: LoginFormPr
             </span>
           </h1>
           <p className="text-xs text-gray-600">
-            Principles • Pattern Recognition • Real-World Application
+            Core Principles • Pattern Recognition • Real-World Application
           </p>
         </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { FiLogOut, FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiUser, FiBook, FiSave, FiUsers, FiMessageSquare, FiHelpCircle, FiUpload, FiCheckCircle, FiStar, FiZap, FiPlay, FiCalendar, FiDollarSign, FiLock } from 'react-icons/fi'
+import { FiLogOut, FiPlus, FiSearch, FiEdit2, FiTrash2, FiEye, FiUser, FiBook, FiSave, FiUsers, FiMessageSquare, FiHelpCircle, FiUpload, FiCheckCircle, FiStar, FiZap, FiPlay, FiCalendar, FiDollarSign, FiLock, FiBell } from 'react-icons/fi'
 import PrincipleCard from './PrincipleCard'
 import PrincipleModal from './PrincipleModal'
 import UserManagement from './UserManagement'
@@ -17,7 +17,10 @@ import AdvancedReader from './AdvancedReader'
 import Videos from './Videos'
 import Sessions from './Sessions'
 import Collaborate from './Collaborate'
+import Inbox from './Inbox'
+import { getUnreadCount } from './notificationsStorage'
 import { canCollaborate, canOpenPrinciple, canSeeReview, canSeeUsers, canUseTools, getNonSubscriberAllowedFeaturedIds } from '@/lib/permissions'
+import { normalizeRole, type AppRole } from '@/lib/roles'
 
 interface DashboardProps {
   user: any
@@ -105,12 +108,22 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
   const [advancedReaderOpen, setAdvancedReaderOpen] = useState(false)
   const [advancedReaderInitialId, setAdvancedReaderInitialId] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<
-    'principles' | 'users' | 'submissions' | 'collaborate' | 'review' | 'forums' | 'saved' | 'matrix' | 'videos' | 'sessions' | 'credits'
+    'principles' | 'users' | 'submissions' | 'collaborate' | 'inbox' | 'review' | 'forums' | 'saved' | 'matrix' | 'videos' | 'sessions' | 'credits'
   >('principles')
   const [proposeOpenDraftId, setProposeOpenDraftId] = useState<number | null>(null)
+  const [inboxVersion, setInboxVersion] = useState(0)
   const [activeTool, setActiveTool] = useState<ToolKey | null>(null)
   const [toolsSubscription, setToolsSubscription] = useState<ToolsSubscription | null>(null)
   const [pendingTool, setPendingTool] = useState<ToolKey | null>(null)
+
+  const HIDDEN_PRINCIPLES_LS_KEY = 'stod_hidden_principles_by_user'
+  const [hiddenPrincipleIds, setHiddenPrincipleIds] = useState<number[]>([])
+  const [hiddenModalOpen, setHiddenModalOpen] = useState(false)
+  const [hideToast, setHideToast] = useState<{ open: boolean; principleId: number | null; title: string }>({
+    open: false,
+    principleId: null,
+    title: '',
+  })
 
   // Phase 1 strategy: everyone gets access to everything.
   // (We’ll tighten permissions later capability-by-capability.)
@@ -132,6 +145,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
   const allowUsers = canSeeUsers(role)
   const allowCollaborate = canCollaborate(role)
   const allowedFeaturedIds = useMemo(() => getNonSubscriberAllowedFeaturedIds(principles), [principles])
+  const unreadInbox = useMemo(() => getUnreadCount(Number(user?.id || 0)), [user?.id, inboxVersion])
+
+  useEffect(() => {
+    const t = setInterval(() => setInboxVersion((v) => v + 1), 1500)
+    return () => clearInterval(t)
+  }, [])
 
   // Phase 1: tools content is open once you can access Tools at all.
   const toolsSubscribed = true
@@ -331,6 +350,37 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
     localStorage.setItem('stod_principles_seed_version', STOD_PRINCIPLES_SEED_VERSION)
   }, [])
 
+  const loadHiddenForUser = (userId: any): number[] => {
+    if (!userId) return []
+    try {
+      const raw = localStorage.getItem(HIDDEN_PRINCIPLES_LS_KEY)
+      const map = raw ? JSON.parse(raw) : {}
+      const list = map[String(userId)]
+      return Array.isArray(list) ? list.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n)) : []
+    } catch {
+      return []
+    }
+  }
+
+  const saveHiddenForUser = (userId: any, ids: number[]) => {
+    if (!userId) return
+    try {
+      const raw = localStorage.getItem(HIDDEN_PRINCIPLES_LS_KEY)
+      const map = raw ? JSON.parse(raw) : {}
+      map[String(userId)] = ids
+      localStorage.setItem(HIDDEN_PRINCIPLES_LS_KEY, JSON.stringify(map))
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    if (!user?.id) return
+    setHiddenPrincipleIds(loadHiddenForUser(user.id))
+  }, [user?.id])
+
+  const hiddenSet = useMemo(() => new Set(hiddenPrincipleIds.map((x) => Number(x))), [hiddenPrincipleIds])
+
   const authorOptions = useMemo(() => {
     const authors = Array.from(new Set(principles.map((p) => p.createdBy).filter(Boolean)))
     authors.sort((a, b) => String(a).localeCompare(String(b)))
@@ -386,6 +436,37 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
 
     setFilteredPrinciples(next)
   }, [searchTerm, principles, sortBy, authorFilter, categoryFilter, featuredOnly])
+
+  const visibleFilteredPrinciples = useMemo(() => {
+    // Hide only applies to Search feed (not Favorites).
+    if (activeTab !== 'principles') return filteredPrinciples
+    return filteredPrinciples.filter((p) => !hiddenSet.has(Number(p?.id)))
+  }, [filteredPrinciples, hiddenSet, activeTab])
+
+  const hidePrincipleFromFeed = (principleId: number) => {
+    const pid = Number(principleId)
+    if (!Number.isFinite(pid) || pid <= 0) return
+
+    const title = String((principles.find((p) => Number(p?.id) === pid) as any)?.title || 'Principle')
+    setHiddenPrincipleIds((prev) => {
+      const next = Array.from(new Set([...(prev || []).map(Number), pid])).filter((n) => Number.isFinite(n) && n > 0)
+      saveHiddenForUser(user?.id, next)
+      return next
+    })
+    setHideToast({ open: true, principleId: pid, title })
+    window.setTimeout(() => {
+      setHideToast((t) => (t.open && t.principleId === pid ? { open: false, principleId: null, title: '' } : t))
+    }, 6000)
+  }
+
+  const unhidePrinciple = (principleId: number) => {
+    const pid = Number(principleId)
+    setHiddenPrincipleIds((prev) => {
+      const next = (prev || []).filter((x) => Number(x) !== pid)
+      saveHiddenForUser(user?.id, next)
+      return next
+    })
+  }
 
   const handleSavePrinciple = (principleData: any) => {
     if (!canEdit && editingPrinciple) {
@@ -556,18 +637,103 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
     localStorage.setItem('stod_principles', JSON.stringify(updated))
   }
 
-  const getRoleInfo = () => {
-    const roleInfo: Record<string, { desc: string; color: string; icon: any }> = {
-      'Non-subscriber': { desc: 'Start here. Explore everything during Phase 1 (permissions will tighten later).', color: 'from-gray-400 to-gray-600', icon: FiEye },
-      'Subscriber': { desc: 'Full access during Phase 1. Later: premium tools and community benefits.', color: 'from-cyan-500 to-cyan-700', icon: FiBook },
-      'Moderator': { desc: 'Review and validate submissions. Earn curation credits. Can cash out.', color: 'from-blue-500 to-blue-700', icon: FiCheckCircle },
-      'Admin': { desc: 'Full system control, user management, credit economy oversight.', color: 'from-purple-500 to-purple-700', icon: FiUsers },
-    }
-    return roleInfo[user?.role] || roleInfo['Non-subscriber']
-  }
+  const normalizedRole: AppRole = normalizeRole(user?.role)
 
-  const roleInfo = getRoleInfo()
+  const roleInfo = useMemo(() => {
+    const info: Record<AppRole, { color: string; icon: any }> = {
+      'Non-subscriber': { color: 'from-gray-400 to-gray-600', icon: FiEye },
+      'Subscriber': { color: 'from-cyan-500 to-cyan-700', icon: FiBook },
+      'Moderator': { color: 'from-blue-500 to-blue-700', icon: FiCheckCircle },
+      'Admin': { color: 'from-purple-500 to-purple-700', icon: FiUsers },
+    }
+    return info[normalizedRole]
+  }, [normalizedRole])
+
   const RoleIcon = roleInfo.icon
+
+  const activeTabLabel = useMemo(() => {
+    const map: Record<string, string> = {
+      principles: 'Search',
+      saved: 'Favorites',
+      forums: 'Forums',
+      tools: 'Tools',
+      videos: 'Videos',
+      sessions: 'Sessions',
+      submissions: 'Propose',
+      collaborate: 'Collaborate',
+      inbox: 'Inbox',
+      credits: 'Credits',
+      review: 'Review',
+      users: 'Users',
+      matrix: 'Matrix',
+    }
+    return map[String(activeTab)] || 'Home'
+  }, [activeTab])
+
+  const quickGuide = useMemo(() => {
+    const tab = String(activeTab)
+
+    if (tab === 'review') {
+      return normalizedRole === 'Admin' || normalizedRole === 'Moderator'
+        ? 'Triage work: use Drafts to monitor in-progress principles, and Principles/Annotations to approve and advance submissions.'
+        : 'Review is available to Moderators and Admins.'
+    }
+
+    if (tab === 'submissions') {
+      if (normalizedRole === 'Non-subscriber') return 'Draft your principle and skip to Submit. Collaboration (suggestions) is available to Subscribers and above.'
+      return 'Create a draft, optionally collaborate via suggestions, then submit for Moderator review.'
+    }
+
+    if (tab === 'collaborate') {
+      return allowCollaborate
+        ? 'Browse open drafts, request access, and submit suggestions. Watch drafts to get notified about updates.'
+        : 'Collaboration is available to Subscribers and above. Upgrade to request access and propose suggestions.'
+    }
+
+    if (tab === 'inbox') {
+      return unreadInbox > 0
+        ? `You have ${unreadInbox} unread update${unreadInbox === 1 ? '' : 's'}. Open an item to jump to the right draft and step.`
+        : 'This is your update feed. Watch drafts to get notified about invites, suggestions, comments, and stage changes.'
+    }
+
+    if (tab === 'tools') {
+      return allowTools
+        ? 'Explore tools and simulations. If a tool is locked later, Credits will be the currency to unlock it.'
+        : 'Tools are available to Subscribers and above. Upgrade to unlock the Tools hub.'
+    }
+
+    if (tab === 'credits') {
+      return 'Credits are your currency. Earn them (Sessions/curation) and spend them to unlock premium experiences.'
+    }
+
+    if (tab === 'users') {
+      return normalizedRole === 'Admin' ? 'Manage users and roles for the demo environment.' : 'User management is Admin-only.'
+    }
+
+    if (tab === 'sessions') {
+      return 'Join sessions to learn, contribute, and earn credits.'
+    }
+
+    if (tab === 'principles') {
+      return normalizedRole === 'Non-subscriber'
+        ? 'Browse featured principles and explore the framework. Upgrade to collaborate on drafts and unlock Tools.'
+        : 'Search principles, open one to read deeply, and save favorites for quick recall.'
+    }
+
+    if (tab === 'saved') {
+      return 'Your favorites list: keep the principles you want to revisit and apply.'
+    }
+
+    if (tab === 'forums') {
+      return 'Discuss principles, ask hard questions, and share real-world applications.'
+    }
+
+    if (tab === 'videos') {
+      return 'Watch short explainers and case studies to internalize the principles.'
+    }
+
+    return 'Explore principles, propose new ones, and collaborate to refine them before review.'
+  }, [activeTab, normalizedRole, allowCollaborate, allowTools, unreadInbox])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-primary-50 to-purple-50">
@@ -586,7 +752,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                   </span>
                 </h1>
                 <p className="text-xs text-gray-500">
-                  Principles • Pattern Recognition • Real-World Application
+                  Core Principles • Pattern Recognition • Real-World Application
                 </p>
               </div>
             </div>
@@ -634,8 +800,16 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
               <RoleIcon className="text-2xl" />
             </div>
             <div>
-              <h3 className="text-lg font-bold mb-1">{user.role} Role</h3>
-              <p className="text-sm opacity-90">{roleInfo.desc}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-lg font-bold">Quick guide</h3>
+                <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-white/20 border border-white/25">
+                  {activeTabLabel}
+                </span>
+                <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-white/10 border border-white/20">
+                  {normalizedRole}
+                </span>
+              </div>
+              <p className="text-sm opacity-90 mt-1">{quickGuide}</p>
             </div>
           </div>
         </div>
@@ -757,6 +931,24 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
               <FiUsers />
               Collaborate
               {!allowCollaborate && <FiLock className="text-sm" />}
+            </button>
+            <button
+              onClick={() => setActiveTab('inbox')}
+              className={`px-6 py-3 font-semibold transition-all rounded-t-xl whitespace-nowrap ${
+                activeTab === 'inbox'
+                  ? 'text-primary-600 border-b-4 border-primary-600 bg-primary-50/70 backdrop-blur-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <FiBell />
+                Inbox
+                {unreadInbox > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[22px] h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold">
+                    {unreadInbox > 99 ? '99+' : unreadInbox}
+                  </span>
+                )}
+              </div>
             </button>
             <button
               onClick={() => setActiveTab('credits')}
@@ -884,30 +1076,40 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                 </label>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm('')
-                  setSortBy('relevance')
-                  setAuthorFilter('all')
-                  setCategoryFilter('all')
-                  setFeaturedOnly(false)
-                }}
-                className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl hover:bg-white/60 transition"
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-2">
+                {hiddenPrincipleIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setHiddenModalOpen(true)}
+                    className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl hover:bg-white/60 transition"
+                  >
+                    Hidden ({hiddenPrincipleIds.length})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('')
+                    setSortBy('relevance')
+                    setAuthorFilter('all')
+                    setCategoryFilter('all')
+                    setFeaturedOnly(false)
+                  }}
+                  className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-2 rounded-xl hover:bg-white/60 transition"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPrinciples.map((principle) => (
+              {visibleFilteredPrinciples.map((principle) => (
                 <PrincipleCard
                   key={principle.id}
                   principle={principle}
                   user={user}
-                  onEdit={canEdit ? handleEdit : undefined}
-                  onDelete={canDelete ? handleDelete : undefined}
                   onSave={canSave ? handleSave : undefined}
+                  onNotInterested={(id) => hidePrincipleFromFeed(id)}
                   onOpen={handleOpenReader}
                   userRole={user.role}
                   isLocked={isPrincipleLockedForUser(principle)}
@@ -916,7 +1118,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
               ))}
             </div>
 
-            {filteredPrinciples.length === 0 && (
+            {visibleFilteredPrinciples.length === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <FiBook className="mx-auto text-4xl mb-4 text-gray-300" />
                 <p>No principles found. {canCreate ? 'Use “Propose” to add a principle.' : 'You have read-only access.'}</p>
@@ -979,13 +1181,21 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
           // Credits are already updated in localStorage by Sessions component
           // This callback can be used for future real-time updates if needed
         }} />}
+        {activeTab === 'inbox' && (
+          <Inbox
+            user={user}
+            onOpenDraft={(draftId) => {
+              setProposeOpenDraftId(draftId)
+              setActiveTab('submissions')
+            }}
+          />
+        )}
         {activeTab === 'submissions' && (
           <PrincipleSubmission
             user={user}
             principles={principles}
             setPrinciples={setPrinciples}
             initialDraftId={proposeOpenDraftId}
-            initialStep={2}
           />
         )}
         {activeTab === 'collaborate' && (
@@ -1118,6 +1328,96 @@ export default function Dashboard({ user, onLogout, onUpdateUser }: DashboardPro
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {hiddenModalOpen && (
+        <div className="fixed inset-0 z-[170]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close hidden list"
+            onClick={() => setHiddenModalOpen(false)}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-xl border border-gray-200 p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-bold text-gray-900">Hidden from Search</div>
+                  <div className="text-sm text-gray-600 mt-1">You can restore items anytime.</div>
+                </div>
+                <button
+                  type="button"
+                  className="px-3 py-2 rounded-xl hover:bg-gray-100 text-gray-700 font-semibold"
+                  onClick={() => setHiddenModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-2 max-h-[60vh] overflow-auto">
+                {hiddenPrincipleIds.length === 0 ? (
+                  <div className="text-sm text-gray-600">Nothing hidden.</div>
+                ) : (
+                  hiddenPrincipleIds
+                    .slice()
+                    .map((id) => {
+                      const p = principles.find((x) => Number(x?.id) === Number(id))
+                      return (
+                        <div key={id} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-gray-200 bg-white">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-gray-900 truncate">{String(p?.title || `Principle ${id}`)}</div>
+                            <div className="text-xs text-gray-600 mt-0.5">{String(p?.category || '')}</div>
+                          </div>
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition"
+                            onClick={() => unhidePrinciple(Number(id))}
+                          >
+                            Unhide
+                          </button>
+                        </div>
+                      )
+                    })
+                )}
+              </div>
+
+              {hiddenPrincipleIds.length > 0 && (
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold transition"
+                    onClick={() => {
+                      setHiddenPrincipleIds([])
+                      saveHiddenForUser(user?.id, [])
+                    }}
+                  >
+                    Clear hidden list
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hideToast.open && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[180]">
+          <div className="bg-gray-900 text-white rounded-2xl shadow-xl border border-white/10 px-4 py-3 flex items-center gap-3">
+            <div className="text-sm">
+              Hidden <span className="font-semibold">{hideToast.title}</span> from Search.
+            </div>
+            <button
+              type="button"
+              className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold transition"
+              onClick={() => {
+                if (hideToast.principleId != null) unhidePrinciple(hideToast.principleId)
+                setHideToast({ open: false, principleId: null, title: '' })
+              }}
+            >
+              Undo
+            </button>
           </div>
         </div>
       )}

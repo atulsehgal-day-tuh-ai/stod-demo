@@ -12,7 +12,6 @@ import {
   FiUsers,
   FiLock,
   FiEdit2,
-  FiMoreVertical,
   FiArchive,
   FiTrash2,
   FiRotateCcw,
@@ -20,7 +19,7 @@ import {
 } from 'react-icons/fi'
 import { canCollaborate } from '@/lib/permissions'
 import DraftWorkflowHeader, { type WorkflowStepKey, type WorkflowStepState } from './DraftWorkflowHeader'
-import ActivityTimeline from './ActivityTimeline'
+import DraftTimelineRail from './DraftTimelineRail'
 import {
   approveAccessRequest,
   archiveDraft,
@@ -31,13 +30,17 @@ import {
   inviteCollaborator,
   loadDrafts,
   applySuggestion,
+  addSuggestionComment,
   createSuggestion,
   declineSuggestion,
   ownerUpdateDraftFields,
+  promoteDraftStatus,
   requestDraftAccess,
+  restoreDraftVersion,
   restoreDraft,
   revokeInvite,
   submitDraftForModeratorReview,
+  toggleWatchDraft,
   updateDraft,
   type DraftFieldKey,
   type DraftPrinciple,
@@ -98,7 +101,7 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
     setPrinciples(updated)
     localStorage.setItem('stod_principles', JSON.stringify(updated))
 
-    submitDraftForModeratorReview(d.id)
+    submitDraftForModeratorReview(d.id, actor)
     refreshDrafts()
     alert('Draft submitted to Moderator review!')
   }
@@ -117,6 +120,10 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
   const [prValueText, setPrValueText] = useState('')
   const [selectedPrId, setSelectedPrId] = useState<number | null>(null)
   const [reviewNote, setReviewNote] = useState('')
+  const [commentText, setCommentText] = useState('')
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historySelectedId, setHistorySelectedId] = useState<number | null>(null)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [readonlyStage, setReadonlyStage] = useState<WorkflowStepKey | null>(null)
   const [infoModal, setInfoModal] = useState<{ open: boolean; title: string; body: string }>({
     open: false,
@@ -131,7 +138,6 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
     fullText: '',
     hardQuestionsText: '',
   })
-  const [draftMenuOpenId, setDraftMenuOpenId] = useState<number | null>(null)
   const [confirmModal, setConfirmModal] = useState<
     | null
     | {
@@ -280,10 +286,9 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
   const isOwner = !!activeDraft && Number(activeDraft.ownerId) === Number(user?.id)
   const hasAccess = !!activeDraft && activeDraft.collaborators.includes(Number(user?.id))
   const myUserId = Number(user?.id || 0)
+  const showTimelineLayout = proposeView === 'editor' && !!activeDraft
 
   const isDraftLockedForReview = (d: DraftPrinciple | null) => String(d?.status || '') === 'SubmittedForReview'
-
-  const closeMenus = () => setDraftMenuOpenId(null)
 
   const onConfirmAction = () => {
     if (!confirmModal) return
@@ -305,7 +310,6 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
 
     setDeleteConfirmText('')
     setConfirmModal(null)
-    closeMenus()
     refreshDrafts()
   }
 
@@ -318,56 +322,9 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
     fullText: '',
   })
 
-  const mySubmissions = principles.filter(p => p.createdById === user.id)
-  const inProcess = mySubmissions.filter(p => p.status === 'In Process')
-  const corePrinciples = mySubmissions.filter(p => p.status === 'Core Principles')
-
-  const workflowStages = [
-    {
-      id: 'Proposed',
-      name: 'Proposed',
-      description: 'Your submission has been received and is waiting for curator assignment.',
-      assignee: 'Moderator',
-      icon: FiUpload,
-      color: 'from-blue-500 to-blue-600',
-    },
-    {
-      id: 'Under Review',
-      name: 'Under Review',
-      description: 'A curator is actively reviewing your submission for quality and alignment with Universal Truths.',
-      assignee: 'Moderator',
-      icon: FiClock,
-      color: 'from-orange-500 to-orange-600',
-    },
-    {
-      id: 'Validated',
-      name: 'Validated',
-      description: 'Curator has approved. The principle is ready for community input and refinement.',
-      assignee: 'Community',
-      icon: FiCheckCircle,
-      color: 'from-green-500 to-green-600',
-    },
-    {
-      id: 'Community Q&A',
-      name: 'Community Q&A',
-      description: 'Open for community questions, discussions, and real-world application examples.',
-      assignee: 'Practitioners & Architects',
-      icon: FiMessageSquare,
-      color: 'from-purple-500 to-purple-600',
-    },
-    {
-      id: 'Published',
-      name: 'Published',
-      description: 'Final approval complete. The principle is now part of Core Principles and available to all users.',
-      assignee: 'System',
-      icon: FiBookOpen,
-      color: 'from-indigo-500 to-indigo-600',
-    },
-  ]
-
-  const getWorkflowStage = (principle: any) => {
-    return workflowStages.find(s => s.id === principle.workflowStage) || workflowStages[0]
-  }
+  const mySubmissions = (Array.isArray(principles) ? principles : []).filter((p: any) => Number(p?.createdById) === Number(user?.id))
+  const inProcess = mySubmissions.filter((p: any) => p?.status === 'In Process')
+  const corePrinciples = mySubmissions.filter((p: any) => p?.status === 'Core Principles')
 
   const categories = ['Decision Making', 'Entrepreneurship', 'Leadership', 'Observation', 'Pattern Recognition', 'Strategy']
 
@@ -388,7 +345,8 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
 
     refreshDrafts()
     setActiveDraftId(d.id)
-    setStep(canUseCollab ? 2 : 3)
+    setStep(1)
+    setProposeView('editor')
 
     setFormData({
       title: '',
@@ -398,7 +356,7 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
       takeHomeValue: '',
       fullText: '',
     })
-    alert(canUseCollab ? 'Draft created! Next: Collaborate.' : 'Draft created! Next: Submit for review.')
+    alert('Draft created! Next: promote it to Collaborate (optional) or Submit.')
   }
 
   const refreshDrafts = () => setDraftsVersion((v) => v + 1)
@@ -406,7 +364,11 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
   useEffect(() => {
     if (!initialDraftId) return
     setActiveDraftId(initialDraftId)
-    setStep(initialStep || (canUseCollab ? 2 : 3))
+    const d = getDraftById(Number(initialDraftId))
+    const status = String(d?.status || 'Draft')
+    const derivedStep: 1 | 2 | 3 =
+      status === 'Collaborating' ? 2 : status === 'ReadyToSubmit' || status === 'SubmittedForReview' ? 3 : 1
+    setStep(initialStep || derivedStep)
     setProposeView('editor')
     // Ensure we reread storage in case it changed from other tabs.
     refreshDrafts()
@@ -485,7 +447,9 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
 
   return (
     <div>
-      {(() => {
+      {activeDraft &&
+        proposeView === 'editor' &&
+        (() => {
         // Determine the banner’s state model (single source of truth for the workflow UI)
         const states: Record<WorkflowStepKey, WorkflowStepState> = {
           draft: 'future',
@@ -557,11 +521,20 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
           <DraftWorkflowHeader stepStates={states} onStepClick={onStepClick} collaborateOptional={true} />
         )
       })()}
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Propose</h2>
-        </div>
-      </div>
+
+      <div className={showTimelineLayout ? 'relative' : ''}>
+        {showTimelineLayout && (
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition inline-flex items-center gap-2"
+              onClick={() => setTimelineOpen((v) => !v)}
+            >
+              <FiClock />
+              Timeline
+            </button>
+          </div>
+        )}
 
       {readonlyStage && (
         <div className="mb-6 bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-6 border-2 border-white/30">
@@ -651,23 +624,6 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                       </div>
                     </div>
                   </div>
-
-                  {activeDraft.activityLog.length > 0 && (
-                    <div className="rounded-xl border border-gray-200 bg-white p-4">
-                      <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Recent activity</div>
-                      <div className="space-y-2">
-                        {activeDraft.activityLog
-                          .slice()
-                          .sort((a: any, b: any) => String(b.at).localeCompare(String(a.at)))
-                          .slice(0, 12)
-                          .map((m: any) => (
-                            <div key={m.id} className="text-xs text-gray-700 p-2 rounded-lg bg-gray-50 border border-gray-200">
-                              <span className="font-semibold">{m.summary}</span> • {m.actorName} • {new Date(m.at).toLocaleString()}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -702,8 +658,35 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
             </div>
           )}
 
-          {activeDraft && isOwner && (
-            <DangerZone draft={activeDraft} />
+          {activeDraft && isOwner && canUseCollab && String(activeDraft.status) !== 'SubmittedForReview' && (
+            <div className="bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-5 border-2 border-white/30">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-bold text-gray-900">Promote stage</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    When you’re done collaborating, mark the draft as ready to submit.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={activeDraft.status !== 'Collaborating'}
+                  className={`px-4 py-2 rounded-xl font-semibold transition ${
+                    activeDraft.status !== 'Collaborating'
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : 'bg-primary-600 hover:bg-primary-700 text-white'
+                  }`}
+                  onClick={() => {
+                    if (activeDraft.status !== 'Collaborating') return
+                    promoteDraftStatus({ draftId: activeDraft.id, actor, toStatus: 'ReadyToSubmit' })
+                    refreshDrafts()
+                    setStep(3)
+                    setReadonlyStage(null)
+                  }}
+                >
+                  Ready to Submit
+                </button>
+              </div>
+            </div>
           )}
 
           {canUseCollab && (
@@ -740,74 +723,145 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Invited to</div>
-                    <div className="mt-2 space-y-2">
-                      {invitedTo.length === 0 ? (
-                        <div className="text-sm text-gray-600">No invites.</div>
-                      ) : (
-                        invitedTo.map((d) => (
-                          <button
-                            key={d.id}
-                            type="button"
-                            onClick={() => setActiveDraftId(d.id)}
-                            className={`w-full text-left p-3 rounded-xl border transition ${
-                              activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
-                            }`}
-                          >
-                            <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
-                            <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  {activeDraft && isOwner ? (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                      <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Collaborators on this draft</div>
+                      <div className="mt-3 space-y-2">
+                        {(() => {
+                          const d = activeDraft
+                          const ownerId = Number(d.ownerId)
+                          const collaboratorIds = (Array.isArray(d.collaborators) ? d.collaborators : []).filter((id) => Number(id) && Number(id) !== ownerId)
+                          const invitedIds = Array.isArray(d.invites) ? d.invites : []
+                          const requestedIds = Array.isArray(d.accessRequests) ? d.accessRequests : []
 
-                  <div>
-                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Collaborating on</div>
-                    <div className="mt-2 space-y-2">
-                      {collabOn.length === 0 ? (
-                        <div className="text-sm text-gray-600">None yet.</div>
-                      ) : (
-                        collabOn.map((d) => (
-                          <button
-                            key={d.id}
-                            type="button"
-                            onClick={() => setActiveDraftId(d.id)}
-                            className={`w-full text-left p-3 rounded-xl border transition ${
-                              activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
-                            }`}
-                          >
-                            <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
-                            <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                          const nameFor = (id: number) => {
+                            const u = (allUsers as any[]).find((x) => Number(x.id) === Number(id))
+                            return String(u?.name || `User ${id}`)
+                          }
 
-                  <div>
-                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Requested</div>
-                    <div className="mt-2 space-y-2">
-                      {requested.length === 0 ? (
-                        <div className="text-sm text-gray-600">No requests.</div>
-                      ) : (
-                        requested.map((d) => (
-                          <button
-                            key={d.id}
-                            type="button"
-                            onClick={() => setActiveDraftId(d.id)}
-                            className={`w-full text-left p-3 rounded-xl border transition ${
-                              activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
-                            }`}
-                          >
-                            <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
-                            <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
-                          </button>
-                        ))
-                      )}
+                          const lastActivityFor = (id: number) => {
+                            const list = Array.isArray(d.activityLog) ? d.activityLog : []
+                            const entry = list.find((e: any) => Number(e?.actorId) === Number(id))
+                            return entry?.at ? String(entry.at) : ''
+                          }
+
+                          const countsFor = (id: number) => {
+                            const sug = Array.isArray(d.suggestions) ? d.suggestions : []
+                            const opened = sug.filter((s: any) => Number(s?.authorId) === Number(id)).length
+                            const applied = sug.filter((s: any) => Number(s?.authorId) === Number(id) && String(s?.status) === 'Applied').length
+                            return { opened, applied }
+                          }
+
+                          const Row = ({ id, role }: { id: number; role: 'Owner' | 'Collaborator' | 'Invited' | 'Requested' }) => {
+                            const { opened, applied } = countsFor(id)
+                            const at = lastActivityFor(id)
+                            const badge =
+                              role === 'Owner'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : role === 'Collaborator'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : role === 'Invited'
+                                    ? 'bg-yellow-50 text-yellow-800 border-yellow-200'
+                                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                            return (
+                              <div key={`${role}:${id}`} className="flex items-start justify-between gap-3 p-3 rounded-xl border border-gray-200 bg-white">
+                                <div>
+                                  <div className="text-sm font-semibold text-gray-900">{nameFor(id)}</div>
+                                  <div className="mt-1 text-[11px] text-gray-600">
+                                    {opened} suggestions • {applied} applied{at ? ` • last activity ${new Date(at).toLocaleString()}` : ''}
+                                  </div>
+                                </div>
+                                <div className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold border ${badge}`}>{role}</div>
+                              </div>
+                            )
+                          }
+
+                          const rows: any[] = []
+                          rows.push(<Row id={ownerId} role="Owner" />)
+                          for (const id of collaboratorIds) rows.push(<Row key={`c:${id}`} id={Number(id)} role="Collaborator" />)
+                          for (const id of invitedIds.filter((x) => !collaboratorIds.includes(Number(x)))) rows.push(<Row key={`i:${id}`} id={Number(id)} role="Invited" />)
+                          for (const id of requestedIds.filter((x) => !collaboratorIds.includes(Number(x)))) rows.push(<Row key={`r:${id}`} id={Number(id)} role="Requested" />)
+
+                          return rows.length === 1 ? (
+                            <div className="text-sm text-gray-600">No collaborators yet. Invite a subscriber below.</div>
+                          ) : (
+                            rows
+                          )
+                        })()}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div>
+                        <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Invited to</div>
+                        <div className="mt-2 space-y-2">
+                          {invitedTo.length === 0 ? (
+                            <div className="text-sm text-gray-600">No invites.</div>
+                          ) : (
+                            invitedTo.map((d) => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => setActiveDraftId(d.id)}
+                                className={`w-full text-left p-3 rounded-xl border transition ${
+                                  activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
+                                }`}
+                              >
+                                <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
+                                <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Collaborating on</div>
+                        <div className="mt-2 space-y-2">
+                          {collabOn.length === 0 ? (
+                            <div className="text-sm text-gray-600">None yet.</div>
+                          ) : (
+                            collabOn.map((d) => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => setActiveDraftId(d.id)}
+                                className={`w-full text-left p-3 rounded-xl border transition ${
+                                  activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
+                                }`}
+                              >
+                                <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
+                                <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Requested</div>
+                        <div className="mt-2 space-y-2">
+                          {requested.length === 0 ? (
+                            <div className="text-sm text-gray-600">No requests.</div>
+                          ) : (
+                            requested.map((d) => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => setActiveDraftId(d.id)}
+                                className={`w-full text-left p-3 rounded-xl border transition ${
+                                  activeDraftId === d.id ? 'border-primary-400 bg-primary-50' : 'border-gray-200 hover:border-primary-200 bg-white'
+                                }`}
+                              >
+                                <div className="font-semibold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
+                                <div className="text-xs text-gray-600 mt-1">Owner: {d.ownerName}</div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {activeDraft && (
                     <>
@@ -890,7 +944,7 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                                               type="button"
                                               className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold"
                                               onClick={() => {
-                                                approveAccessRequest(activeDraft.id, Number(id))
+                                                approveAccessRequest(activeDraft.id, Number(id), actor)
                                                 refreshDrafts()
                                               }}
                                             >
@@ -900,7 +954,7 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                                               type="button"
                                               className="px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-800 font-semibold"
                                               onClick={() => {
-                                                denyAccessRequest(activeDraft.id, Number(id))
+                                                denyAccessRequest(activeDraft.id, Number(id), actor)
                                                 refreshDrafts()
                                               }}
                                             >
@@ -1020,13 +1074,37 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                           </label>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {activeDraft && (
+                          <button
+                            type="button"
+                            className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition"
+                            onClick={() => {
+                              toggleWatchDraft(activeDraft.id, Number(user?.id || 0))
+                              refreshDrafts()
+                            }}
+                          >
+                            {Array.isArray(activeDraft.watchers) && activeDraft.watchers.includes(Number(user?.id || 0)) ? 'Watching' : 'Watch'}
+                          </button>
+                        )}
+                        {activeDraft && (
+                          <button
+                            type="button"
+                            className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition"
+                            onClick={() => {
+                              setHistorySelectedId(null)
+                              setHistoryOpen(true)
+                            }}
+                          >
+                            History
+                          </button>
+                        )}
                         {!hasAccess && activeDraft.invites.includes(Number(user?.id)) && (
                           <button
                             type="button"
                             className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
                             onClick={() => {
-                              approveAccessRequest(activeDraft.id, Number(user?.id))
+                              approveAccessRequest(activeDraft.id, Number(user?.id), actor)
                               refreshDrafts()
                             }}
                           >
@@ -1122,60 +1200,50 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                             </div>
                           </div>
 
-                          <div className="mt-4">
-                            <ActivityTimeline
-                              draft={activeDraft}
-                              selectedSuggestionId={selectedPrId}
-                              onSelectSuggestion={(id) => setSelectedPrId(id)}
-                            />
-                          </div>
-
-                          <div className="mt-4 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
-                            <div>
-                              <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Create suggestion</div>
-                              {isOwner ? (
-                                <div className="text-sm text-gray-600">
-                                  Owner does not create suggestions. Review and apply/decline suggestions on the right.
-                                </div>
-                              ) : hasAccess ? (
-                                <div className="space-y-3">
-                                  <select
-                                    value={prField}
-                                    onChange={(e) => setPrField(e.target.value as DraftFieldKey)}
-                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
-                                  >
-                                    <option value="title">title</option>
-                                    <option value="category">category</option>
-                                    <option value="description">description</option>
-                                    <option value="takeHomeValue">takeHomeValue</option>
-                                    <option value="fullText">fullText</option>
-                                    <option value="hardQuestions">hardQuestions</option>
-                                  </select>
-                                  <textarea
-                                    value={prValueText}
-                                    onChange={(e) => setPrValueText(e.target.value)}
-                                    rows={prField === 'hardQuestions' ? 5 : 4}
-                                    placeholder={prField === 'hardQuestions' ? 'One question per line…' : 'Proposed value…'}
-                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
-                                  />
-                                  <input
-                                    value={prMessage}
-                                    onChange={(e) => setPrMessage(e.target.value)}
-                                    placeholder="Suggestion note (optional)"
-                                    className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
-                                  />
-                                  <button
-                                    type="button"
-                                    className="w-full px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
-                                    onClick={submitSuggestion}
-                                  >
-                                    Create suggestion
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="text-sm text-gray-600">You need access to create suggestions on this draft.</div>
-                              )}
-                            </div>
+                          <div className={`mt-4 grid grid-cols-1 ${isOwner ? '' : 'lg:grid-cols-[1fr_1fr]'} gap-4`}>
+                            {!isOwner && (
+                              <div>
+                                <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Create suggestion</div>
+                                {hasAccess ? (
+                                  <div className="space-y-3">
+                                    <select
+                                      value={prField}
+                                      onChange={(e) => setPrField(e.target.value as DraftFieldKey)}
+                                      className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
+                                    >
+                                      <option value="title">title</option>
+                                      <option value="category">category</option>
+                                      <option value="description">description</option>
+                                      <option value="takeHomeValue">takeHomeValue</option>
+                                      <option value="fullText">fullText</option>
+                                      <option value="hardQuestions">hardQuestions</option>
+                                    </select>
+                                    <textarea
+                                      value={prValueText}
+                                      onChange={(e) => setPrValueText(e.target.value)}
+                                      rows={prField === 'hardQuestions' ? 5 : 4}
+                                      placeholder={prField === 'hardQuestions' ? 'One question per line…' : 'Proposed value…'}
+                                      className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
+                                    />
+                                    <input
+                                      value={prMessage}
+                                      onChange={(e) => setPrMessage(e.target.value)}
+                                      placeholder="Suggestion note (optional)"
+                                      className="w-full px-3 py-2 rounded-xl border border-gray-200 bg-white"
+                                    />
+                                    <button
+                                      type="button"
+                                      className="w-full px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
+                                      onClick={submitSuggestion}
+                                    >
+                                      Create suggestion
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-gray-600">You need access to create suggestions on this draft.</div>
+                                )}
+                              </div>
+                            )}
 
                             <div>
                               <div className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">Review</div>
@@ -1221,6 +1289,61 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                                           : String((selectedPR.patch as any).value || '—')}
                                       </div>
                                     </div>
+                                  </div>
+
+                                  <div className="pt-2">
+                                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Discussion</div>
+                                    <div className="mt-2 space-y-2">
+                                      {(Array.isArray((selectedPR as any).comments) && (selectedPR as any).comments.length > 0) ? (
+                                        (selectedPR as any).comments
+                                          .slice()
+                                          .sort((a: any, b: any) => String(a.at).localeCompare(String(b.at)))
+                                          .map((c: any) => (
+                                            <div key={c.id} className="p-3 rounded-xl border border-gray-200 bg-white">
+                                              <div className="text-sm text-gray-900 font-semibold">{c.authorName}</div>
+                                              <div className="text-[11px] text-gray-600 mt-0.5">{new Date(c.at).toLocaleString()}</div>
+                                              <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">{c.body}</div>
+                                            </div>
+                                          ))
+                                      ) : (
+                                        <div className="text-sm text-gray-600">No comments yet.</div>
+                                      )}
+                                    </div>
+
+                                    {hasAccess && (
+                                      <div className="mt-3 flex gap-2">
+                                        <input
+                                          value={commentText}
+                                          onChange={(e) => setCommentText(e.target.value)}
+                                          placeholder="Write a comment…"
+                                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 bg-white"
+                                        />
+                                        <button
+                                          type="button"
+                                          disabled={!String(commentText || '').trim()}
+                                          className={`px-4 py-2 rounded-xl font-semibold transition ${
+                                            !String(commentText || '').trim()
+                                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                              : 'bg-primary-600 hover:bg-primary-700 text-white'
+                                          }`}
+                                          onClick={() => {
+                                            const body = String(commentText || '').trim()
+                                            if (!body) return
+                                            addSuggestionComment({
+                                              draftId: activeDraft.id,
+                                              suggestionId: selectedPR.id,
+                                              authorId: Number(user?.id || 0),
+                                              authorName: String(user?.name || ''),
+                                              body,
+                                            })
+                                            setCommentText('')
+                                            refreshDrafts()
+                                          }}
+                                        >
+                                          Comment
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {isOwner ? (
@@ -1308,6 +1431,12 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
               </div>
             </div>
           )}
+
+          {activeDraft && isOwner && (
+            <div className="pt-2">
+              <DangerZone draft={activeDraft} />
+            </div>
+          )}
         </div>
       )}
 
@@ -1339,12 +1468,6 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                 </button>
               </div>
             </div>
-
-            {activeDraft && isOwner && (
-              <div className="mt-4">
-                <DangerZone draft={activeDraft} />
-              </div>
-            )}
 
             {!activeDraft ? (
               <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
@@ -1396,10 +1519,10 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                   </div>
                   <button
                     type="button"
-                    disabled={!isOwner || activeDraft.status !== 'Draft'}
+                    disabled={!isOwner || activeDraft.status !== 'ReadyToSubmit'}
                     onClick={() => submitDraftToModerator(activeDraft)}
                     className={`px-5 py-2.5 rounded-xl font-semibold transition ${
-                      !isOwner || activeDraft.status !== 'Draft'
+                      !isOwner || activeDraft.status !== 'ReadyToSubmit'
                         ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl'
                     }`}
@@ -1407,6 +1530,11 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                     Submit to Moderator review
                   </button>
                 </div>
+                {isOwner && activeDraft.status !== 'ReadyToSubmit' && (
+                  <div className="text-xs text-gray-600 mt-2">
+                    Mark the draft as <span className="font-semibold">Ready to Submit</span> before submitting to Moderator review.
+                  </div>
+                )}
                 {!isOwner && (
                   <div className="text-xs text-gray-600">
                     Only the draft owner can submit for Moderator review. You can still collaborate via pull requests.
@@ -1415,12 +1543,54 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
               </div>
             )}
           </div>
+
+          {activeDraft && isOwner && (
+            <div className="pt-2">
+              <DangerZone draft={activeDraft} />
+            </div>
+          )}
         </div>
       )}
 
       {/* Propose (Draft stage) */}
       {!readonlyStage && step === 1 && proposeView === 'landing' && (
         <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border-2 border-blue-200">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-500 rounded-lg p-3">
+                  <FiEdit2 className="text-white" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-blue-700">{myDrafts.length}</div>
+                  <div className="text-sm text-blue-600">Drafts</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border-2 border-green-200">
+              <div className="flex items-center gap-3">
+                <div className="bg-green-500 rounded-lg p-3">
+                  <FiUpload className="text-white" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-green-700">{inProcess.length}</div>
+                  <div className="text-sm text-green-600">Submitted</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-200">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-500 rounded-lg p-3">
+                  <FiCheckCircle className="text-white" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-purple-700">{corePrinciples.length}</div>
+                  <div className="text-sm text-purple-600">Published</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-6 border-2 border-white/30">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
@@ -1453,14 +1623,10 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                 .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
                 .map((d) => {
                   const locked = isDraftLockedForReview(d)
-                  const menuOpen = draftMenuOpenId === d.id
                   return (
                     <div
                       key={d.id}
                       className="relative bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-5 border-2 border-white/30 hover:border-primary-200 transition"
-                      onMouseLeave={() => {
-                        if (draftMenuOpenId === d.id) setDraftMenuOpenId(null)
-                      }}
                     >
                       <button
                         type="button"
@@ -1492,71 +1658,15 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                               </div>
                             ) : null}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-sm text-primary-700 font-semibold inline-flex items-center gap-1">
-                              Open <FiArrowRight />
-                            </div>
-                          </div>
                         </div>
                       </button>
-
-                      <button
-                        type="button"
-                        aria-label="Draft actions"
-                        className="absolute top-4 right-4 p-2 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDraftMenuOpenId(menuOpen ? null : d.id)
-                        }}
-                      >
-                        <FiMoreVertical />
-                      </button>
-
-                      {menuOpen && (
-                        <div
-                          className="absolute top-14 right-4 z-50 w-56 rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            disabled={locked}
-                            className={`w-full px-4 py-3 text-left text-sm font-semibold flex items-center gap-2 border-b border-gray-100 ${
-                              locked ? 'text-gray-400 cursor-not-allowed bg-gray-50' : 'hover:bg-gray-50 text-gray-900'
-                            }`}
-                            onClick={() => {
-                              if (locked) return
-                              setConfirmModal({ mode: 'archive', draftId: d.id, title: d.fields.title || 'Untitled draft' })
-                              setDraftMenuOpenId(null)
-                            }}
-                          >
-                            <FiArchive />
-                            Archive
-                          </button>
-                          <button
-                            type="button"
-                            disabled={locked}
-                            className={`w-full px-4 py-3 text-left text-sm font-semibold flex items-center gap-2 ${
-                              locked ? 'text-gray-400 cursor-not-allowed bg-gray-50' : 'hover:bg-red-50 text-red-700'
-                            }`}
-                            onClick={() => {
-                              if (locked) return
-                              setDeleteConfirmText('')
-                              setConfirmModal({ mode: 'delete', draftId: d.id, title: d.fields.title || 'Untitled draft' })
-                              setDraftMenuOpenId(null)
-                            }}
-                          >
-                            <FiTrash2 />
-                            Delete permanently
-                          </button>
-                        </div>
-                      )}
                     </div>
                   )
                 })
             )}
           </div>
 
-          <div className="bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-6 border-2 border-white/30">
+          <div className="rounded-2xl p-6 border-2 border-dashed border-gray-300 bg-gray-50/80 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-bold text-gray-900">Archived</div>
@@ -1572,7 +1682,7 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                   .slice()
                   .sort((a, b) => String(b.archivedAt || b.updatedAt).localeCompare(String(a.archivedAt || a.updatedAt)))
                   .map((d) => (
-                    <div key={d.id} className="bg-white rounded-2xl border border-gray-200 p-5">
+                    <div key={d.id} className="bg-white/70 rounded-2xl border border-dashed border-gray-300 p-5 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-lg font-bold text-gray-900">{d.fields.title || 'Untitled draft'}</div>
@@ -1608,81 +1718,6 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
             )}
           </div>
 
-          {confirmModal && (
-            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmModal(null)} />
-              <div className="relative w-full max-w-lg rounded-2xl bg-white border border-gray-200 shadow-2xl p-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`h-10 w-10 rounded-2xl flex items-center justify-center border ${
-                        confirmModal.mode === 'delete' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-800'
-                      }`}
-                    >
-                      {confirmModal.mode === 'delete' ? <FiAlertTriangle /> : confirmModal.mode === 'archive' ? <FiArchive /> : <FiRotateCcw />}
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {confirmModal.mode === 'archive'
-                          ? 'Archive draft?'
-                          : confirmModal.mode === 'restore'
-                            ? 'Restore draft?'
-                            : 'Delete draft permanently?'}
-                      </div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        <span className="font-semibold">{confirmModal.title}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button type="button" className="text-gray-500 hover:text-gray-800" onClick={() => setConfirmModal(null)}>
-                    ✕
-                  </button>
-                </div>
-
-                <div className="mt-4 text-sm text-gray-700">
-                  {confirmModal.mode === 'archive' && 'This will hide the draft from your main list. You can restore it later.'}
-                  {confirmModal.mode === 'restore' && 'This will restore the draft back to your main list.'}
-                  {confirmModal.mode === 'delete' && 'This cannot be undone. Collaborators will lose access.'}
-                </div>
-
-                {confirmModal.mode === 'delete' && (
-                  <div className="mt-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Type DELETE to confirm</label>
-                    <input
-                      value={deleteConfirmText}
-                      onChange={(e) => setDeleteConfirmText(e.target.value)}
-                      placeholder="DELETE"
-                      className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    />
-                  </div>
-                )}
-
-                <div className="mt-6 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold"
-                    onClick={() => setConfirmModal(null)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={confirmModal.mode === 'delete' && deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
-                    className={`px-4 py-2 rounded-xl font-semibold transition ${
-                      confirmModal.mode === 'delete'
-                        ? deleteConfirmText.trim().toUpperCase() !== 'DELETE'
-                          ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                          : 'bg-red-600 hover:bg-red-700 text-white'
-                        : 'bg-primary-600 hover:bg-primary-700 text-white'
-                    }`}
-                    onClick={onConfirmAction}
-                  >
-                    {confirmModal.mode === 'archive' ? 'Archive' : confirmModal.mode === 'restore' ? 'Restore' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1693,47 +1728,17 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
             <button
               type="button"
               className="text-sm font-semibold text-gray-700 hover:text-gray-900 inline-flex items-center gap-2"
-              onClick={() => setProposeView('landing')}
+              onClick={() => {
+                setActiveDraftId(null)
+                setReadonlyStage(null)
+                setStep(1)
+                setProposeView('landing')
+              }}
             >
               <FiArrowRight className="rotate-180" />
               Back to drafts
             </button>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border-2 border-blue-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-500 rounded-lg p-3">
-              <FiClock className="text-white" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-blue-700">{inProcess.length}</div>
-              <div className="text-sm text-blue-600">In Process</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border-2 border-green-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-500 rounded-lg p-3">
-              <FiCheckCircle className="text-white" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-green-700">{corePrinciples.length}</div>
-              <div className="text-sm text-green-600">Core Principles</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-200">
-          <div className="flex items-center gap-3">
-            <div className="bg-purple-500 rounded-lg p-3">
-              <FiUpload className="text-white" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-purple-700">{mySubmissions.length}</div>
-              <div className="text-sm text-purple-600">Total Submissions</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
         {activeDraft && isOwner && activeDraft.status === 'Draft' && (
           <div className="bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-6 mb-6 border-2 border-white/30">
@@ -1807,11 +1812,51 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                 />
               </div>
 
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
-                  onClick={() => {
+                <div className="flex flex-col sm:flex-row gap-2 justify-end">
+                  <button
+                    type="button"
+                    disabled={!isOwner || activeDraft.status !== 'Draft' || !canUseCollab}
+                    className={`px-5 py-2.5 rounded-xl font-semibold transition border ${
+                      !isOwner || activeDraft.status !== 'Draft' || !canUseCollab
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                        : 'bg-white hover:bg-gray-50 text-gray-900 border-gray-200'
+                    }`}
+                    onClick={() => {
+                      if (!isOwner) return
+                      if (!canUseCollab) return
+                      if (activeDraft.status !== 'Draft') return
+                      promoteDraftStatus({ draftId: activeDraft.id, actor, toStatus: 'Collaborating' })
+                      refreshDrafts()
+                      setStep(2)
+                      setReadonlyStage(null)
+                    }}
+                  >
+                    Start Collaborating (Optional)
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!isOwner || activeDraft.status !== 'Draft'}
+                    className={`px-5 py-2.5 rounded-xl font-semibold transition border ${
+                      !isOwner || activeDraft.status !== 'Draft'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200'
+                        : 'bg-white hover:bg-gray-50 text-gray-900 border-gray-200'
+                    }`}
+                    onClick={() => {
+                      if (!isOwner) return
+                      if (activeDraft.status !== 'Draft') return
+                      promoteDraftStatus({ draftId: activeDraft.id, actor, toStatus: 'ReadyToSubmit' })
+                      refreshDrafts()
+                      setStep(3)
+                      setReadonlyStage(null)
+                    }}
+                  >
+                    Skip to Submit
+                  </button>
+
+                  <button
+                    type="button"
+                    className="px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
+                    onClick={() => {
                     const nextFields = {
                       title: ownerEditDraft.title,
                       category: ownerEditDraft.category,
@@ -1956,103 +2001,30 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
           </div>
         )}
 
-          <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-4">My Submissions</h3>
-        <div className="space-y-4">
-          {mySubmissions.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FiUpload className="mx-auto text-4xl mb-4 text-gray-300" />
-              <p>No submissions yet. Submit your first principle!</p>
-            </div>
-          ) : (
-            mySubmissions.map((principle) => {
-              const stage = getWorkflowStage(principle)
-              const StageIcon = stage.icon
-              const currentStageIndex = workflowStages.findIndex(s => s.id === (principle.workflowStage || 'Proposed'))
-              
-              return (
-                <div
-                  key={principle.id}
-                  className="bg-white/75 backdrop-blur-md rounded-xl shadow-md p-6 border-2 border-white/30 hover:border-green-300/50 transition-all"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-lg font-bold text-gray-900">{principle.title}</h4>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      principle.status === 'Core Principles' ? 'bg-green-100 text-green-700' :
-                      principle.status === 'In Process' ? 'bg-blue-100 text-blue-700' :
-                      'bg-gray-100 text-gray-700'
-                    }`}>
-                      {principle.status}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 text-sm mb-4">{principle.description}</p>
-
-                  {/* Workflow Progress */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className={`bg-gradient-to-r ${stage.color} rounded-lg p-2`}>
-                          <StageIcon className="text-white text-sm" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-semibold text-gray-900">{stage.name}</div>
-                          <div className="text-xs text-gray-600">With: {principle.currentAssignee || stage.assignee}</div>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-600 mt-2">{stage.description}</p>
-                  </div>
-
-                  {/* Workflow Stages Visualization */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <div className="relative flex items-center justify-between">
-                      {workflowStages.map((s, idx) => {
-                        const SIcon = s.icon
-                        const isActive = idx <= currentStageIndex
-                        const isCurrent = s.id === principle.workflowStage
-                        return (
-                          <div key={s.id} className="flex-1 flex flex-col items-center relative z-10">
-                            {idx < workflowStages.length - 1 && (
-                              <div 
-                                className={`absolute top-5 left-1/2 h-0.5 w-full ${
-                                  idx < currentStageIndex 
-                                    ? `bg-gradient-to-r ${s.color}` 
-                                    : 'bg-gray-200'
-                                }`}
-                                style={{ width: 'calc(100% - 40px)', marginLeft: '20px' }}
-                              ></div>
-                            )}
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all relative z-20 ${
-                              isActive 
-                                ? `bg-gradient-to-r ${s.color} text-white shadow-lg` 
-                                : 'bg-gray-200 text-gray-400'
-                            } ${isCurrent ? 'ring-4 ring-primary-300 scale-110' : ''}`}>
-                              <SIcon className="text-sm" />
-                            </div>
-                            <div className={`text-xs text-center font-medium max-w-[80px] ${
-                              isActive ? 'text-gray-900' : 'text-gray-400'
-                            }`}>
-                              {s.name}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {principle.curatorName && (
-                    <div className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200">
-                      Curated by: <span className="font-semibold">{principle.curatorName}</span>
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
-          </div>
         </>
       )}
+
+      {showTimelineLayout && activeDraft && (
+        <DraftTimelineRail
+          draft={activeDraft}
+          selectedSuggestionId={selectedPrId}
+          onSelectSuggestion={(id) => setSelectedPrId(id)}
+          mobileOpen={timelineOpen}
+          onCloseMobile={() => setTimelineOpen(false)}
+        />
+      )}
+
+      {showTimelineLayout && (
+        <button
+          type="button"
+          className="fixed bottom-6 right-6 z-[180] px-4 py-3 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-semibold shadow-xl transition inline-flex items-center gap-2"
+          onClick={() => setTimelineOpen((v) => !v)}
+        >
+          <FiClock />
+          Timeline
+        </button>
+      )}
+      </div>
 
       {infoModal.open && (
         <div className="fixed inset-0 z-[140]">
@@ -2074,6 +2046,200 @@ export default function PrincipleSubmission({ user, principles, setPrinciples, i
                 >
                   OK
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmModal(null)} />
+          <div className="relative w-full max-w-lg rounded-2xl bg-white border border-gray-200 shadow-2xl p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`h-10 w-10 rounded-2xl flex items-center justify-center border ${
+                    confirmModal.mode === 'delete' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-800'
+                  }`}
+                >
+                  {confirmModal.mode === 'delete' ? <FiAlertTriangle /> : confirmModal.mode === 'archive' ? <FiArchive /> : <FiRotateCcw />}
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-gray-900">
+                    {confirmModal.mode === 'archive'
+                      ? 'Archive draft?'
+                      : confirmModal.mode === 'restore'
+                        ? 'Restore draft?'
+                        : 'Delete draft permanently?'}
+                  </div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    <span className="font-semibold">{confirmModal.title}</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="text-gray-500 hover:text-gray-800" onClick={() => setConfirmModal(null)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 text-sm text-gray-700">
+              {confirmModal.mode === 'archive' && 'This will hide the draft from your main list. You can restore it later.'}
+              {confirmModal.mode === 'restore' && 'This will restore the draft back to your main list.'}
+              {confirmModal.mode === 'delete' && 'This cannot be undone. Collaborators will lose access.'}
+            </div>
+
+            {confirmModal.mode === 'delete' && (
+              <div className="mt-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Type DELETE to confirm</label>
+                <input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="DELETE"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold"
+                onClick={() => setConfirmModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={confirmModal.mode === 'delete' && deleteConfirmText.trim().toUpperCase() !== 'DELETE'}
+                className={`px-4 py-2 rounded-xl font-semibold transition ${
+                  confirmModal.mode === 'delete'
+                    ? deleteConfirmText.trim().toUpperCase() !== 'DELETE'
+                      ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-primary-600 hover:bg-primary-700 text-white'
+                }`}
+                onClick={onConfirmAction}
+              >
+                {confirmModal.mode === 'archive' ? 'Archive' : confirmModal.mode === 'restore' ? 'Restore' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyOpen && activeDraft && (
+        <div className="fixed inset-0 z-[145]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close history"
+            onClick={() => setHistoryOpen(false)}
+          />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="w-full max-w-5xl rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 relative">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-lg font-bold text-gray-900">Version history</div>
+                  <div className="text-sm text-gray-600 mt-1">Compare and restore previous versions (owner-only restore).</div>
+                </div>
+                <button type="button" className="text-gray-500 hover:text-gray-800" onClick={() => setHistoryOpen(false)}>
+                  ✕
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Versions</div>
+                  <div className="mt-3 space-y-2 max-h-[420px] overflow-auto pr-1">
+                    {(Array.isArray((activeDraft as any).versions) ? (activeDraft as any).versions : []).length === 0 ? (
+                      <div className="text-sm text-gray-600">No versions yet.</div>
+                    ) : (
+                      (activeDraft as any).versions.map((v: any) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`w-full text-left p-3 rounded-xl border transition ${
+                            Number(historySelectedId) === Number(v.id) ? 'border-primary-400 bg-primary-50' : 'border-gray-200 bg-white hover:border-primary-200'
+                          }`}
+                          onClick={() => setHistorySelectedId(Number(v.id))}
+                        >
+                          <div className="text-sm font-semibold text-gray-900">{v.summary || 'Version'}</div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            {v.actorName} • {new Date(v.at).toLocaleString()}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                  {!historySelectedId ? (
+                    <div className="text-sm text-gray-600">Select a version to compare.</div>
+                  ) : (
+                    (() => {
+                      const versions = Array.isArray((activeDraft as any).versions) ? (activeDraft as any).versions : []
+                      const v = versions.find((x: any) => Number(x.id) === Number(historySelectedId))
+                      const current = activeDraft.fields
+                      const prev = v?.fields || {}
+
+                      const Field = ({ label, a, b }: { label: string; a: any; b: any }) => (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-xl border border-gray-200 bg-gray-50">
+                            <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Current {label}</div>
+                            <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">{a || '—'}</div>
+                          </div>
+                          <div className="p-3 rounded-xl border border-gray-200 bg-white">
+                            <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Selected {label}</div>
+                            <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">{b || '—'}</div>
+                          </div>
+                        </div>
+                      )
+
+                      return (
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="text-sm font-bold text-gray-900">{v?.summary || 'Version'}</div>
+                              <div className="text-xs text-gray-600 mt-1">
+                                {v?.actorName} • {v?.at ? new Date(v.at).toLocaleString() : ''}
+                              </div>
+                            </div>
+                            {isOwner && (
+                              <button
+                                type="button"
+                                className="px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-semibold transition"
+                                onClick={() => {
+                                  restoreDraftVersion({
+                                    draftId: activeDraft.id,
+                                    owner: { id: Number(user?.id || 0), name: String(user?.name || '') },
+                                    versionId: Number(historySelectedId),
+                                  })
+                                  refreshDrafts()
+                                  setHistoryOpen(false)
+                                }}
+                              >
+                                Restore this version
+                              </button>
+                            )}
+                          </div>
+
+                          <Field label="Title" a={current.title} b={prev.title} />
+                          <Field label="Category" a={current.category} b={prev.category} />
+                          <Field label="Take-home" a={current.takeHomeValue} b={prev.takeHomeValue} />
+                          <Field label="Description" a={current.description} b={prev.description} />
+                          <Field label="Full text" a={current.fullText} b={prev.fullText} />
+                          <Field
+                            label="Hard questions"
+                            a={Array.isArray(current.hardQuestions) ? current.hardQuestions.join('\n') : ''}
+                            b={Array.isArray(prev.hardQuestions) ? prev.hardQuestions.join('\n') : ''}
+                          />
+                        </div>
+                      )
+                    })()
+                  )}
+                </div>
               </div>
             </div>
           </div>

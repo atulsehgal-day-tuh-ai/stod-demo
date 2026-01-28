@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { FiCheckCircle, FiX, FiEdit, FiUser, FiClock, FiArrowRight, FiMessageSquare, FiBookOpen } from 'react-icons/fi'
 import { loadAnnotations, updateAnnotation } from './annotationsStorage'
 import type { PrincipleAnnotation } from './annotationsStorage'
+import DraftTimelineRail from './DraftTimelineRail'
+import { loadDrafts, type DraftPrinciple } from './draftsStorage'
 
 interface CuratorReviewProps {
   user: any
@@ -14,15 +16,39 @@ interface CuratorReviewProps {
 export default function CuratorReview({ user, principles, setPrinciples }: CuratorReviewProps) {
   const [selectedPrinciple, setSelectedPrinciple] = useState<any>(null)
   const [reviewNotes, setReviewNotes] = useState('')
-  const [reviewMode, setReviewMode] = useState('principles' as 'principles' | 'annotations')
+  const [reviewMode, setReviewMode] = useState('principles' as 'principles' | 'annotations' | 'drafts')
   const [selectedAnnotationId, setSelectedAnnotationId] = useState(null as number | null)
   const [annotationReviewNotes, setAnnotationReviewNotes] = useState('')
   const [annotationsVersion, setAnnotationsVersion] = useState(0)
+  const [draftsVersion, setDraftsVersion] = useState(0)
+  const [includeArchivedDrafts, setIncludeArchivedDrafts] = useState(false)
+  const [selectedDraftId, setSelectedDraftId] = useState<number | null>(null)
+  const [draftTimelineOpen, setDraftTimelineOpen] = useState(false)
 
   const annotations = useMemo(() => loadAnnotations(), [annotationsVersion])
   const pendingAnnotations = annotations.filter((a) => a.status === 'Pending Review')
   const approvedAnnotations = annotations.filter((a) => a.status === 'Approved')
   const selectedAnnotation = annotations.find((a) => a.id === selectedAnnotationId) || null
+
+  // Draft oversight: keep a lightweight refresh loop so moderators/admins see new drafts appear.
+  const drafts = useMemo(() => loadDrafts(), [draftsVersion])
+  useEffect(() => {
+    const t = setInterval(() => setDraftsVersion((v) => v + 1), 1500)
+    return () => clearInterval(t)
+  }, [])
+
+  const visibleDrafts = useMemo(() => {
+    const list = Array.isArray(drafts) ? drafts : []
+    return list
+      .filter((d) => (includeArchivedDrafts ? true : String(d.status) !== 'Archived'))
+      .slice()
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+  }, [drafts, includeArchivedDrafts])
+
+  const selectedDraft: DraftPrinciple | null = useMemo(() => {
+    if (!selectedDraftId) return null
+    return visibleDrafts.find((d) => Number(d.id) === Number(selectedDraftId)) || null
+  }, [selectedDraftId, visibleDrafts])
 
   const inProcessPrinciples = principles.filter(p => p.status === 'In Process')
   const myCurated = principles.filter(p => p.curatorId === user.id && p.status === 'Core Principles')
@@ -202,9 +228,192 @@ export default function CuratorReview({ user, principles, setPrinciples }: Curat
             {pendingAnnotations.length}
           </span>
         </button>
+        {(user?.role === 'Moderator' || user?.role === 'Admin') && (
+          <button
+            type="button"
+            onClick={() => setReviewMode('drafts')}
+            className={`px-4 py-2 rounded-xl font-semibold transition flex items-center gap-2 ${
+              reviewMode === 'drafts' ? 'bg-primary-600 text-white' : 'bg-white/70 text-gray-700 hover:bg-white'
+            }`}
+          >
+            <FiEdit />
+            Drafts
+            <span
+              className={`text-xs font-bold px-2 py-1 rounded-full ${
+                reviewMode === 'drafts' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              {visibleDrafts.length}
+            </span>
+          </button>
+        )}
       </div>
 
-      {reviewMode === 'annotations' ? (
+      {reviewMode === 'drafts' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg font-bold text-gray-900">All drafts</h3>
+              <label className="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={includeArchivedDrafts}
+                  onChange={(e) => setIncludeArchivedDrafts(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                Include archived
+              </label>
+            </div>
+
+            <div className="space-y-3">
+              {visibleDrafts.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 bg-white/60 backdrop-blur-sm rounded-2xl border-2 border-dashed border-white/40">
+                  <FiEdit className="mx-auto text-4xl mb-4 text-gray-300" />
+                  <p>No drafts found.</p>
+                </div>
+              ) : (
+                visibleDrafts.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDraftId(d.id)
+                      setDraftTimelineOpen(false)
+                    }}
+                    className={`w-full text-left bg-white/75 backdrop-blur-md rounded-xl shadow-md p-5 border-2 transition-all ${
+                      selectedDraftId === d.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-4">
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">{d.fields?.title || 'Untitled draft'}</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Owner: <span className="font-semibold">{d.ownerName}</span> • Status:{' '}
+                          <span className="font-semibold">{d.status}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center gap-2 shrink-0">
+                        <FiClock />
+                        {new Date(d.updatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Suggestions</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{(d.suggestions || []).length}</div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Collaborators</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{(d.collaborators || []).length}</div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Open to requests</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{d.isOpenToCollaborators ? 'Yes' : 'No'}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div>
+            {selectedDraft ? (
+              <div className="bg-white/75 backdrop-blur-md rounded-2xl shadow-xl p-6 border-2 border-white/30 sticky top-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="text-xl font-bold text-gray-900">{selectedDraft.fields?.title || 'Untitled draft'}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Owner: <span className="font-semibold">{selectedDraft.ownerName}</span> • Status:{' '}
+                      <span className="font-semibold">{selectedDraft.status}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">Updated: {new Date(selectedDraft.updatedAt).toLocaleString()}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-900 font-semibold transition inline-flex items-center gap-2"
+                    onClick={() => setDraftTimelineOpen((v) => !v)}
+                  >
+                    <FiClock />
+                    Timeline
+                  </button>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Category</div>
+                    <div className="text-gray-900 font-semibold mt-1">{selectedDraft.fields?.category || '—'}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Take-home</div>
+                    <div className="text-gray-900 font-semibold mt-1">{selectedDraft.fields?.takeHomeValue || '—'}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Description</div>
+                  <div className="text-gray-800 mt-2 whitespace-pre-wrap">{selectedDraft.fields?.description || '—'}</div>
+                </div>
+
+                <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Full text</div>
+                  <div className="text-gray-800 mt-2 whitespace-pre-wrap">{selectedDraft.fields?.fullText || '—'}</div>
+                </div>
+
+                <div className="mt-4 p-3 rounded-xl bg-gray-50 border border-gray-200">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wider">Hard questions</div>
+                  <div className="mt-2 space-y-2">
+                    {(selectedDraft.fields?.hardQuestions || []).length === 0 ? (
+                      <div className="text-gray-700">—</div>
+                    ) : (
+                      (selectedDraft.fields?.hardQuestions || []).map((q, idx) => (
+                        <div key={idx} className="text-gray-800">
+                          <span className="font-semibold">{idx + 1}.</span> {q}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {(() => {
+                  const list = Array.isArray(selectedDraft.suggestions) ? selectedDraft.suggestions : []
+                  const open = list.filter((s) => s.status === 'Open').length
+                  const applied = list.filter((s) => s.status === 'Applied').length
+                  const declined = list.filter((s) => s.status === 'Declined').length
+                  return (
+                    <div className="mt-5 grid grid-cols-3 gap-3 text-xs">
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Open</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{open}</div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Applied</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{applied}</div>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-white p-3">
+                        <div className="font-bold text-gray-600 uppercase tracking-wider">Declined</div>
+                        <div className="mt-1 text-gray-900 font-semibold">{declined}</div>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                <DraftTimelineRail
+                  draft={selectedDraft}
+                  selectedSuggestionId={null}
+                  mobileOpen={draftTimelineOpen}
+                  onCloseMobile={() => setDraftTimelineOpen(false)}
+                />
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500 bg-white/60 backdrop-blur-sm rounded-2xl border-2 border-dashed border-white/40 sticky top-4">
+                <FiArrowRight className="mx-auto text-4xl mb-4 text-gray-300" />
+                <p>Select a draft to view details.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : reviewMode === 'annotations' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h3 className="text-lg font-bold text-gray-900 mb-4">Pending annotations</h3>
