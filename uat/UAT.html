@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>STOD Demo — UAT Scripts (Business Runbook)</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --card: #ffffff;
+        --muted: #6b7280;
+        --text: #111827;
+        --border: #e5e7eb;
+        --accent: #2563eb;
+        --accent2: #7c3aed;
+        --ok: #16a34a;
+        --bad: #dc2626;
+        --warn: #d97706;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: var(--sans);
+        color: var(--text);
+        background: radial-gradient(1200px 700px at 20% 10%, rgba(124,58,237,.18), transparent 60%),
+                    radial-gradient(900px 600px at 85% 15%, rgba(37,99,235,.16), transparent 55%),
+                    linear-gradient(135deg, #f8fafc 0%, #eef2ff 45%, #faf5ff 100%);
+      }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      code, pre { font-family: var(--mono); }
+
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px 72px; }
+      .hero {
+        background: rgba(255,255,255,.82);
+        border: 1px solid rgba(255,255,255,.6);
+        backdrop-filter: blur(12px);
+        border-radius: 22px;
+        box-shadow: 0 16px 40px rgba(0,0,0,.10);
+        padding: 22px 22px 18px;
+      }
+      .titleRow { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+      h1 { margin: 0; font-size: 28px; letter-spacing: -0.02em; }
+      .sub { color: var(--muted); margin-top: 10px; line-height: 1.45; }
+      .pillRow { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+      .pill {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 10px; border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.85);
+        font-size: 12px; font-weight: 700; color: #374151;
+      }
+      .pill b { color: #111827; }
+
+      .grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+      @media (min-width: 980px) { .grid { grid-template-columns: 340px 1fr; gap: 16px; } }
+
+      .toc, .card {
+        background: rgba(255,255,255,.86);
+        border: 1px solid rgba(255,255,255,.65);
+        backdrop-filter: blur(12px);
+        border-radius: 18px;
+        box-shadow: 0 12px 34px rgba(0,0,0,.08);
+      }
+      .toc { padding: 16px; position: sticky; top: 16px; align-self: start; }
+      .toc h2 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .10em; color: #374151; }
+      .toc a { display: block; padding: 7px 8px; border-radius: 10px; color: #1f2937; font-weight: 650; font-size: 13px; }
+      .toc a:hover { background: rgba(37,99,235,.08); text-decoration: none; }
+      .toc .small { font-size: 12px; font-weight: 600; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+
+      .content { display: flex; flex-direction: column; gap: 14px; }
+      .card { padding: 18px; }
+      .card h2 { margin: 0 0 10px; font-size: 18px; }
+      .card h3 { margin: 16px 0 8px; font-size: 15px; }
+      .card p { margin: 8px 0; color: #374151; line-height: 1.55; }
+      .hr { height: 1px; background: var(--border); margin: 14px 0; }
+
+      .callout {
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(249,250,251,.86);
+        padding: 12px 12px;
+        color: #374151;
+      }
+      .callout strong { color: #111827; }
+      .callout.warn { border-color: rgba(217,119,6,.30); background: rgba(255,247,237,.82); }
+      .callout.ok { border-color: rgba(22,163,74,.25); background: rgba(240,253,244,.82); }
+      .callout.bad { border-color: rgba(220,38,38,.25); background: rgba(254,242,242,.86); }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid var(--border); padding: 10px; vertical-align: top; }
+      th { background: rgba(243,244,246,.85); text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #374151; }
+      td { font-size: 13px; color: #111827; }
+      .mono { font-family: var(--mono); font-size: 12px; }
+
+      .tc {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 12px 12px;
+        background: rgba(255,255,255,.92);
+        margin-top: 10px;
+      }
+      .tcHead {
+        display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      }
+      .tcId {
+        font-family: var(--mono);
+        font-weight: 800;
+        font-size: 12px;
+        color: #0f172a;
+        background: rgba(37,99,235,.10);
+        border: 1px solid rgba(37,99,235,.20);
+        padding: 4px 8px;
+        border-radius: 999px;
+      }
+      .tcTitle { font-weight: 800; color: #0f172a; }
+      .tcMeta { font-size: 12px; color: var(--muted); }
+      .tcBody { margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 10px; }
+      @media (min-width: 820px) { .tcBody { grid-template-columns: 1fr 1fr; } }
+
+      .steps, .expected { border: 1px solid var(--border); border-radius: 14px; padding: 10px; background: rgba(249,250,251,.75); }
+      .steps h4, .expected h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #374151; }
+      ol { margin: 0; padding-left: 18px; }
+      ul { margin: 0; padding-left: 18px; }
+      li { margin: 6px 0; color: #1f2937; line-height: 1.5; }
+
+      .exec {
+        margin-top: 10px;
+        border: 1px dashed rgba(107,114,128,.65);
+        border-radius: 14px;
+        padding: 10px;
+        background: rgba(255,255,255,.78);
+      }
+      .execRow { display: grid; grid-template-columns: 1fr; gap: 10px; }
+      @media (min-width: 820px) { .execRow { grid-template-columns: 1.2fr .6fr; } }
+      .field label { display: block; font-size: 12px; font-weight: 800; color: #374151; margin-bottom: 6px; }
+      .field textarea, .field input, .field select {
+        width: 100%;
+        padding: 9px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.95);
+        font-family: var(--sans);
+        font-size: 13px;
+      }
+      .field textarea { min-height: 78px; resize: vertical; }
+      .checks { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+      .check {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,.92);
+        font-size: 13px; font-weight: 700; color: #111827;
+      }
+
+      .footer { margin-top: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+
+      /* Print to PDF */
+      @media print {
+        body { background: #ffffff; }
+        .wrap { max-width: none; padding: 0; }
+        .toc { display: none; }
+        .hero, .card, .tc, .steps, .expected, .exec { box-shadow: none !important; backdrop-filter: none !important; }
+        a { color: #111827; text-decoration: none; }
+        .tc { break-inside: avoid; page-break-inside: avoid; }
+        .card { break-inside: avoid; page-break-inside: avoid; }
+        .footer { display: none; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <div class="hero" id="top">
+        <div class="titleRow">
+          <h1>STOD Demo — UAT Scripts (Business Runbook)</h1>
+          <div class="tcMeta">Printable HTML • Use <span class="mono">Ctrl+P → Save as PDF</span></div>
+        </div>
+        <div class="sub">
+          This document is designed for a <b>business expert</b> to validate the end-to-end product experience on the <b>Vercel deployment</b>.
+          It includes step-by-step scripts, expected results, and fields for recording PASS/FAIL and evidence.
+        </div>
+        <div class="pillRow">
+          <div class="pill"><b>Roles</b>: Non-subscriber, Subscriber, Moderator, Admin</div>
+          <div class="pill"><b>Core flows</b>: Search/Reader • Propose • Collaborate • Inbox • Review</div>
+          <div class="pill"><b>Data model</b>: localStorage (demo)</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="toc">
+          <h2>Table of contents</h2>
+          <a href="#runbook">1. How to run UAT</a>
+          <a href="#roles">2. Demo users & roles</a>
+          <a href="#reset">3. Reset & troubleshooting</a>
+          <a href="#persona">4. Persona packs (role-based)</a>
+          <a href="#feature">5. Feature scripts (tab-by-tab)</a>
+          <a href="#e2e">6. End-to-end scenarios</a>
+          <a href="#negative">7. Negative / edge tests</a>
+          <div class="small">
+            Tip: For collaboration testing (invites/accept/suggestions), stay within the <b>same browser profile</b> and
+            switch users by logging out and logging back in.
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="card" id="runbook">
+            <h2>1) How to run UAT (Runbook)</h2>
+            <div class="callout warn">
+              <strong>Critical demo constraint:</strong> This app persists data in <b>browser localStorage</b>. Collaboration is a workflow simulation,
+              so you must test multi-user flows by switching users in the <b>same browser profile</b>.
+            </div>
+            <h3>1.1 What you are testing (one line)</h3>
+            <p><b>A collaborative principle-authoring and review workspace</b>: search/read/save principles, propose new principles via Draft → Collaborate → Submit, manage collaboration via Inbox + Timeline, and review via Moderator/Admin.</p>
+
+            <h3>1.2 UAT preparation checklist</h3>
+            <ul>
+              <li>Confirm the Vercel URL to test (paste it into the “Environment” field in your first test case).</li>
+              <li>Use Chrome or Edge.</li>
+              <li>Have a folder ready for screenshots (evidence).</li>
+              <li>Plan to run in one browser profile (avoid mixing Incognito and normal windows).</li>
+            </ul>
+
+            <h3>1.3 How to generate the PDF deliverable</h3>
+            <ol>
+              <li>Open this file (<span class="mono">uat/UAT.html</span>) in Chrome/Edge.</li>
+              <li>Press <b>Ctrl+P</b> (Print).</li>
+              <li>Destination: <b>Save as PDF</b>.</li>
+              <li>Enable <b>Background graphics</b> (recommended).</li>
+              <li>Save as: <span class="mono">STOD-UAT-&lt;date&gt;.pdf</span>.</li>
+            </ol>
+          </div>
+
+          <div class="card" id="roles">
+            <h2>2) Demo users & roles</h2>
+
+            <h3>2.1 Current role model</h3>
+            <p>Earlier versions had 6 roles. The app is now simplified to <b>4 role types</b>:</p>
+            <ul>
+              <li><b>Non-subscriber</b></li>
+              <li><b>Subscriber</b></li>
+              <li><b>Moderator</b></li>
+              <li><b>Admin</b></li>
+            </ul>
+
+            <h3>2.2 Demo credentials</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>User</th>
+                  <th>Password</th>
+                  <th>Used for</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><b>Admin</b></td>
+                  <td class="mono">admin</td>
+                  <td class="mono">admin123</td>
+                  <td>All access + Users tab</td>
+                </tr>
+                <tr>
+                  <td><b>Moderator</b></td>
+                  <td class="mono">moderator</td>
+                  <td class="mono">moderator123</td>
+                  <td>Review tab + Draft oversight + Annotation approvals</td>
+                </tr>
+                <tr>
+                  <td><b>Subscriber</b></td>
+                  <td class="mono">subscriber1</td>
+                  <td class="mono">subscriber123</td>
+                  <td>Owner flow (draft creation + invites)</td>
+                </tr>
+                <tr>
+                  <td><b>Subscriber</b></td>
+                  <td class="mono">subscriber2</td>
+                  <td class="mono">subscriber123</td>
+                  <td>Collaborator flow (accept invite + suggestions)</td>
+                </tr>
+                <tr>
+                  <td><b>Subscriber</b></td>
+                  <td class="mono">subscriber3</td>
+                  <td class="mono">subscriber123</td>
+                  <td>Request-access flow (open drafts)</td>
+                </tr>
+                <tr>
+                  <td><b>Non-subscriber</b></td>
+                  <td class="mono">non</td>
+                  <td class="mono">non123</td>
+                  <td>Locking + upsell behavior</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card" id="reset">
+            <h2>3) Reset & troubleshooting</h2>
+
+            <h3>3.1 Soft reset (recommended first)</h3>
+            <ul>
+              <li>Logout</li>
+              <li>Refresh</li>
+              <li>Login again</li>
+            </ul>
+
+            <h3>3.2 Hard reset (clears demo data in this browser)</h3>
+            <div class="callout">
+              <strong>When to use:</strong> You want a clean run, or the demo data got inconsistent during testing.
+            </div>
+            <ol>
+              <li>Open DevTools (F12)</li>
+              <li>Go to <b>Application</b></li>
+              <li>Left side: <b>Storage → Local Storage</b> → select the app origin</li>
+              <li>Delete these keys if present:</li>
+            </ol>
+            <pre class="mono">stod_user
+stod_users
+stod_principles
+stod_principles_seed_version
+stod_hidden_principles_by_user
+stod_principle_drafts
+stod_notifications_by_user
+stod_principle_annotations
+stod_videos
+stod_sessions
+stod_bookings
+stod_forums</pre>
+            <ol start="5">
+              <li>Refresh the page</li>
+            </ol>
+            <div class="callout ok"><strong>Expected:</strong> App returns to clean seeded state.</div>
+
+            <h3>3.3 Common UAT issues</h3>
+            <ul>
+              <li><b>“I don’t see the invite / draft / notification”</b>: refresh once; confirm you are using the same browser profile; confirm you are signed in as the correct user.</li>
+              <li><b>“It opened on a random page earlier”</b>: the app should always land on Home; if it doesn’t, capture a screenshot and report as a defect.</li>
+            </ul>
+          </div>
+
+          <div class="card" id="persona">
+            <h2>4) Persona packs (role-based UAT)</h2>
+
+            <div class="callout warn">
+              <strong>Rule for collaboration UAT:</strong> When a script says “switch user”, do <b>Logout</b> then login as the next user.
+              Do not open a new browser, unless you intentionally want a separate clean data store.
+            </div>
+
+            <h3>4.1 Non-subscriber pack (Nina)</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">NS-01</span>
+                  <span class="tcTitle">Sign in as Non-subscriber</span>
+                </div>
+                <div class="tcMeta">Role: Non-subscriber • Area: Auth/Nav</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>From Home, click <b>Sign In</b>.</li>
+                    <li>Login as <span class="mono">non</span> / <span class="mono">non123</span>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Dashboard loads.</li>
+                    <li>Role indicator shows <b>Non-subscriber</b>.</li>
+                    <li><b>Tools</b> and <b>Collaborate</b> appear locked/disabled.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field">
+                    <label>Actual result / notes</label>
+                    <textarea></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Evidence (screenshot name / link)</label>
+                    <input type="text" />
+                    <div style="height:10px"></div>
+                    <label>Defect ID / link (if fail)</label>
+                    <input type="text" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">NS-02</span>
+                  <span class="tcTitle">Search and open allowed (featured) principles</span>
+                </div>
+                <div class="tcMeta">Role: Non-subscriber • Area: Search/Reader</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Go to <b>Search</b>.</li>
+                    <li>Open a featured principle card (or one that is not locked).</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Principle opens in <b>Advanced Reader</b>.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field">
+                    <label>Actual result / notes</label>
+                    <textarea></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Evidence</label>
+                    <input type="text" />
+                    <div style="height:10px"></div>
+                    <label>Defect link</label>
+                    <input type="text" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">NS-03</span>
+                  <span class="tcTitle">Attempt to open a locked principle (upsell modal)</span>
+                </div>
+                <div class="tcMeta">Role: Non-subscriber • Area: Gating/Upsell</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>In <b>Search</b>, click a card that appears locked (or triggers an unlock prompt).</li>
+                    <li>In the unlock modal, read the messaging.</li>
+                    <li>(Optional) Click “Become Subscriber” (demo) to validate the upgrade path.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>An unlock/upsell modal appears.</li>
+                    <li>Upgrade path changes role locally and unlocks access.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field">
+                    <label>Actual result / notes</label>
+                    <textarea></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Evidence</label>
+                    <input type="text" />
+                    <div style="height:10px"></div>
+                    <label>Defect link</label>
+                    <input type="text" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <h3 style="margin-top:18px">4.2 Subscriber pack (Sam/Sid/Sana)</h3>
+            <div class="callout">
+              <strong>Primary validation areas:</strong> drafts workflow, collaboration (invites/requests), suggestions + comments, watch/unwatch, Inbox notifications, timeline drawer behavior, and submission to Moderator review.
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-01</span>
+                  <span class="tcTitle">Sign in as Subscriber (Sam)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Auth/Nav</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Logout (if needed).</li>
+                    <li>Login as <span class="mono">subscriber1</span> / <span class="mono">subscriber123</span>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li><b>Collaborate</b> is enabled.</li>
+                    <li><b>Inbox</b> is available.</li>
+                    <li><b>Review</b> is hidden (Subscriber does not review).</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-02</span>
+                  <span class="tcTitle">Create a draft (Owner)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Propose/Draft</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Go to <b>Propose</b>.</li>
+                    <li>Create a new draft.</li>
+                    <li>Fill the fields (title, category, description, take-home, full text, hard questions).</li>
+                    <li>Save/confirm the draft exists in “My drafts”.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>A new draft is created and is selectable.</li>
+                    <li>Owner edits appear in the <b>Activity timeline</b>.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Draft title used (write it here)</label><input type="text" /><div style="height:10px"></div><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-03</span>
+                  <span class="tcTitle">Timeline drawer open/close reliability</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Timeline UX</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Open the draft workspace.</li>
+                    <li>Click <b>Timeline</b> to open the drawer.</li>
+                    <li>Close via <b>X</b>.</li>
+                    <li>Open again; close by clicking the <b>backdrop</b>.</li>
+                    <li>Open again; close with <b>Esc</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Timeline drawer opens and closes reliably by all methods.</li>
+                    <li>It closes (does not “shift” or partially remain on screen).</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-04</span>
+                  <span class="tcTitle">Open draft to collaborator requests</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Collaboration setup</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>As Sam (owner), in the draft workspace enable: <b>Open this draft to collaborator requests</b>.</li>
+                    <li>Note the exact draft title (you will look for it in Collaborate as other users).</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>The draft is marked open for requests and will appear in Collaborate → Open drafts for other subscribers.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-05</span>
+                  <span class="tcTitle">Invite a subscriber (Sam invites Sid)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Invites/Inbox</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>As Sam (owner), open the draft and go to the Collaborate stage (inside the draft workflow).</li>
+                    <li>In “Invite a subscriber”, select <b>Sid Subscriber 2</b>.</li>
+                    <li>Click <b>Invite</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Sid receives an <b>Invite received</b> notification in Inbox.</li>
+                    <li>Sid sees the draft under Collaborate → <b>Invited</b>.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-06</span>
+                  <span class="tcTitle">Switch user and accept invite (Sid)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Collaborate/Invites</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Logout.</li>
+                    <li>Login as <span class="mono">subscriber2</span> / <span class="mono">subscriber123</span>.</li>
+                    <li>Open <b>Collaborate</b>.</li>
+                    <li>In “Invited”, find the draft and click <b>Accept invite</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Draft moves to “Collaborating”.</li>
+                    <li>Owner receives an “accepted invite” notification.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-07</span>
+                  <span class="tcTitle">Create a suggestion (Sid)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Suggestions</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>As Sid, open the draft (Open button in Collaborate or from Inbox summary).</li>
+                    <li>In Suggestions, use “Create suggestion” to propose a change to <b>description</b>.</li>
+                    <li>Provide a meaningful proposed value and submit.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Suggestion appears as <b>Open</b>.</li>
+                    <li>Timeline logs “Suggestion created”.</li>
+                    <li>Owner receives Inbox notification.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-08</span>
+                  <span class="tcTitle">Comment on the suggestion (Sid)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Suggestion discussion</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Select the open suggestion.</li>
+                    <li>In “Discussion”, add a comment clarifying the intent.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Comment appears immediately.</li>
+                    <li>Timeline logs “New comment”.</li>
+                    <li>Owner receives Inbox update.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-09</span>
+                  <span class="tcTitle">Owner applies the suggestion (Sam)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Owner review/apply</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Logout; login as <span class="mono">subscriber1</span> (Sam).</li>
+                    <li>Open the draft.</li>
+                    <li>Select Sid’s open suggestion.</li>
+                    <li>Add an optional review note.</li>
+                    <li>Click <b>Apply</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Draft field updates to the proposed value.</li>
+                    <li>Suggestion becomes <b>Applied</b>.</li>
+                    <li>Timeline logs applied event.</li>
+                    <li>Sid receives “Suggestion applied” notification.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-10</span>
+                  <span class="tcTitle">Decline requires a note (negative)</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Validation/Guardrails</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>As Sam (owner), select an <b>Open</b> suggestion.</li>
+                    <li>Try to click <b>Decline</b> without entering a review note.</li>
+                    <li>Then enter a note and decline.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Decline is blocked/disabled until a note exists.</li>
+                    <li>Once declined, status becomes <b>Declined</b> and timeline logs it.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-11</span>
+                  <span class="tcTitle">Watch / Watching and Inbox updates</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Watch + Notifications</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Login as Sid (<span class="mono">subscriber2</span>).</li>
+                    <li>Open the draft and click <b>Watch</b> (confirm it becomes “Watching”).</li>
+                    <li>Logout; login as Sam (<span class="mono">subscriber1</span>).</li>
+                    <li>Make an owner edit to any field.</li>
+                    <li>Logout; login as Sid and open <b>Inbox</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Sid receives an “Owner edit” notification in Inbox.</li>
+                    <li>Inbox item can open the draft directly.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">SUB-12</span>
+                  <span class="tcTitle">Promote to ReadyToSubmit and submit to Moderator review</span>
+                </div>
+                <div class="tcMeta">Role: Subscriber • Area: Workflow stages</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Login as Sam (owner).</li>
+                    <li>From Collaborate stage, click <b>Ready to Submit</b>.</li>
+                    <li>Go to Submit step and click <b>Submit to Moderator review</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Draft status becomes <b>SubmittedForReview</b>.</li>
+                    <li>Timeline logs stage transition and submission event.</li>
+                    <li>Danger zone actions are locked/blocked after submission.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3 style="margin-top:18px">4.3 Moderator pack</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">MOD-01</span>
+                  <span class="tcTitle">Sign in as Moderator and access Review</span>
+                </div>
+                <div class="tcMeta">Role: Moderator • Area: Review access</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Login as <span class="mono">moderator</span> / <span class="mono">moderator123</span>.</li>
+                    <li>Open the <b>Review</b> tab.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Review is visible and accessible.</li>
+                    <li>Modes exist: Principles, Annotations, Drafts.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">MOD-02</span>
+                  <span class="tcTitle">Draft oversight list/detail + timeline drawer</span>
+                </div>
+                <div class="tcMeta">Role: Moderator • Area: Draft oversight</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>In Review, switch to <b>Drafts</b>.</li>
+                    <li>Select the draft created earlier.</li>
+                    <li>Click <b>Timeline</b> and close it.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Draft appears in list (sorted by updated time).</li>
+                    <li>Detail shows fields + counts.</li>
+                    <li>Timeline drawer works (open/close).</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">MOD-03</span>
+                  <span class="tcTitle">Annotations: approve and verify in Advanced Reader</span>
+                </div>
+                <div class="tcMeta">Role: Moderator • Area: Annotations workflow</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Ensure an annotation exists (create it via Reader as any user).</li>
+                    <li>As Moderator, open Review → <b>Annotations</b>.</li>
+                    <li>Select a pending annotation and click <b>Approve</b>.</li>
+                    <li>Open Advanced Reader and verify the approved annotation appears under “Community annotations”.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Annotation status becomes Approved.</li>
+                    <li>Approved annotation appears in Advanced Reader.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3 style="margin-top:18px">4.4 Admin pack</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div>
+                  <span class="tcId">ADM-01</span>
+                  <span class="tcTitle">Sign in as Admin and access Users tab</span>
+                </div>
+                <div class="tcMeta">Role: Admin • Area: Users access</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Login as <span class="mono">admin</span> / <span class="mono">admin123</span>.</li>
+                    <li>Open the <b>Users</b> tab.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected results</h4>
+                  <ul>
+                    <li>Users tab is visible and loads a user directory.</li>
+                    <li>You can see role badges and actions (edit/delete).</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="feature">
+            <h2>5) Feature scripts (tab-by-tab)</h2>
+            <p>These tests validate each top-level tab independently. They can be run in any order, but the best practice is: Search → Reader → Propose → Collaborate → Inbox → Review.</p>
+
+            <h3>5.1 Home (Landing)</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">HOME-01</span> <span class="tcTitle">Always lands on Home (Vercel)</span></div>
+                <div class="tcMeta">Area: Landing</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>Open the Vercel URL in a fresh tab.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>You see the Home/Landing page.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Environment (paste Vercel URL)</label><input type="text" /><div style="height:10px"></div><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3>5.2 Search (filters, sort, hide, favourites)</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">SEARCH-01</span> <span class="tcTitle">Search keyword + clear</span></div>
+                <div class="tcMeta">Area: Search</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Open Search.</li>
+                    <li>Type a keyword that exists in a title/description (example: “Context”).</li>
+                    <li>Confirm results change.</li>
+                    <li>Click <b>Clear</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected</h4>
+                  <ul>
+                    <li>Results filter based on the keyword.</li>
+                    <li>Clear resets filters/search.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">SEARCH-02</span> <span class="tcTitle">Sort modes</span></div>
+                <div class="tcMeta">Area: Search</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>In Search, change Sort: Relevance → Recency → Popularity → Title (A–Z).</li>
+                    <li>Observe ordering changes.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected</h4>
+                  <ul>
+                    <li>Ordering updates appropriately for each sort mode.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">SEARCH-03</span> <span class="tcTitle">Filters: Author / Category / Featured</span></div>
+                <div class="tcMeta">Area: Search</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Pick an Author filter (not “All”).</li>
+                    <li>Pick a Category filter (not “All”).</li>
+                    <li>Enable “Featured only”.</li>
+                    <li>Confirm results change each time; then Clear.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected</h4>
+                  <ul>
+                    <li>Only matching cards show for each filter.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">SEARCH-04</span> <span class="tcTitle">Not interested (hide) + undo + Hidden list</span></div>
+                <div class="tcMeta">Area: Search</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>On any card, open the “…” menu and click <b>Not interested</b>.</li>
+                    <li>Observe it disappears from Search.</li>
+                    <li>Click <b>Undo</b> on the toast to restore.</li>
+                    <li>Hide again; open <b>Hidden (#)</b>; click <b>Unhide</b>.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected</h4>
+                  <ul>
+                    <li>Hide removes item from Search feed.</li>
+                    <li>Undo restores immediately.</li>
+                    <li>Hidden modal allows restoring items.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Which principle did you hide?</label><input type="text" /><div style="height:10px"></div><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3>5.3 Favourites</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">FAV-01</span> <span class="tcTitle">Add to favourites and open from Favourites</span></div>
+                <div class="tcMeta">Area: Favourites</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>From Search, click <b>Add to Favourites</b> on a principle.</li><li>Open <b>Favourites</b>.</li><li>Click the saved card.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Card opens Advanced Reader (same as Search behavior).</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3>5.4 Advanced Reader</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">READER-01</span> <span class="tcTitle">Reveal content and navigate sections</span></div>
+                <div class="tcMeta">Area: Reader</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>Open any principle in Advanced Reader.</li><li>Click <b>Click to reveal</b>.</li><li>Switch: Overview / Full / Take-home / Hard questions.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Content reveals and section switching works.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3>5.5 Tools</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">TOOLS-01</span> <span class="tcTitle">Dissonance Matrix smoke test</span></div>
+                <div class="tcMeta">Area: Tools</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>Open Tools.</li><li>Open Dissonance Matrix.</li><li>Answer all questions and view results.</li><li>Open trade-off sliders and adjust.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Results render and sliders affect target position + recommendations.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <h3>5.6 Videos</h3>
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">VIDEOS-01</span> <span class="tcTitle">Search/filter and open video detail</span></div>
+                <div class="tcMeta">Area: Videos</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>Open Videos tab.</li><li>Search for a term (e.g., “Context”).</li><li>Choose a category filter.</li><li>Open a video card.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Detail screen opens with placeholder player and metadata.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="e2e">
+            <h2>6) End-to-end scenarios</h2>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">E2E-01</span> <span class="tcTitle">Draft → Invite → Suggest → Apply → Submit → Moderator oversight</span></div>
+                <div class="tcMeta">Actors: Sam, Sid, Moderator</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps">
+                  <h4>Steps</h4>
+                  <ol>
+                    <li>Sam creates a draft and opens it to collaborator requests.</li>
+                    <li>Sam invites Sid.</li>
+                    <li>Sid accepts invite and creates a suggestion + comment.</li>
+                    <li>Sam applies the suggestion.</li>
+                    <li>Sam marks ReadyToSubmit and submits to Moderator review.</li>
+                    <li>Moderator validates the draft is visible in Review → Drafts and opens timeline.</li>
+                  </ol>
+                </div>
+                <div class="expected">
+                  <h4>Expected</h4>
+                  <ul>
+                    <li>Inbox notifications appear for invite, suggestion, comment, apply, and submission.</li>
+                    <li>Timeline reflects the full collaboration history.</li>
+                    <li>Draft is locked appropriately after submission.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="negative">
+            <h2>7) Negative / edge tests</h2>
+            <div class="callout">
+              Use this section to validate guardrails, permissions, and error prevention behaviors.
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">NEG-01</span> <span class="tcTitle">Non-subscriber cannot access Collaborate/Tools</span></div>
+                <div class="tcMeta">Role: Non-subscriber • Area: Permissions</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>Login as Non-subscriber.</li><li>Attempt to open Collaborate and Tools.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Locked messaging appears; no collaboration/tools actions are accessible.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="tc">
+              <div class="tcHead">
+                <div><span class="tcId">NEG-02</span> <span class="tcTitle">Owner cannot create suggestions (collaborators only)</span></div>
+                <div class="tcMeta">Role: Subscriber (Owner) • Area: Guardrails</div>
+              </div>
+              <div class="tcBody">
+                <div class="steps"><h4>Steps</h4><ol><li>As Sam (owner), open draft and go to Suggestions.</li><li>Verify the “Create suggestion” panel is not shown to owner.</li></ol></div>
+                <div class="expected"><h4>Expected</h4><ul><li>Owner cannot create suggestions; only collaborators can.</li></ul></div>
+              </div>
+              <div class="exec">
+                <div class="checks">
+                  <label class="check"><input type="checkbox" /> PASS</label>
+                  <label class="check"><input type="checkbox" /> FAIL</label>
+                  <label class="check"><input type="checkbox" /> BLOCKED</label>
+                </div>
+                <div class="execRow" style="margin-top:10px">
+                  <div class="field"><label>Actual result / notes</label><textarea></textarea></div>
+                  <div class="field"><label>Evidence</label><input type="text" /><div style="height:10px"></div><label>Defect link</label><input type="text" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="callout ok">
+              <strong>Finish:</strong> After executing, export to PDF and share with the product owner along with the defect list.
+            </div>
+          </div>
+
+          <div class="footer">STOD Demo UAT Pack • Print with Ctrl+P → Save as PDF</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+

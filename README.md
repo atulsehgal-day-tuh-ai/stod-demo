@@ -11,13 +11,12 @@ A modern **Next.js** demo app for browsing, contributing, and curating “Same T
 - **Principles repository**
   - Search, filter, sort, and read principles
   - “In Process” workflow stages for submissions and curator review
-- **Roles & permissions (demo)**
-  - **Looker**: browse/read (limited free previews; unlock more principles with credits)
-  - **Member**: save principles + better session pricing
-  - **Practitioner**: forums + deeper prompts/tools + stronger session discounts
-  - **Contributor**: submit principles + Advanced Reader usage + high session discounts
-  - **Moderator**: review/curate submissions and annotations + best session pricing (often free in demo)
-  - **Admin**: full access including user management
+- **Roles & permissions (demo) — simplified**
+  - Earlier versions used 6 roles. The demo now uses **4 role types**:
+    - **Non-subscriber**: browse/read (limited), cannot use Tools or Collaborate
+    - **Subscriber**: collaborate on drafts (invites/requests/suggestions) + Inbox
+    - **Moderator**: review submissions/annotations + draft oversight
+    - **Admin**: full access including user management
 - **Tools & learning**
   - **Tools Hub** (subscription gated in demo) including **Advanced Reader**
   - **Videos** and **Sessions** with role-based pricing/discounts
@@ -30,10 +29,16 @@ A modern **Next.js** demo app for browsing, contributing, and curating “Same T
 
 - **Admin**: `admin` / `admin123`
 - **Moderator**: `moderator` / `moderator123`
-- **Contributor**: `contributor` / `contributor123`
-- **Practitioner**: `practitioner` / `practitioner123`
-- **Member**: `member` / `member123`
-- **Looker**: `looker` / `looker123`
+- **Subscriber**: `subscriber1` / `subscriber123`
+- **Subscriber**: `subscriber2` / `subscriber123`
+- **Subscriber**: `subscriber3` / `subscriber123`
+- **Non-subscriber**: `non` / `non123`
+
+## UAT (User Acceptance Testing)
+
+If you want a business-friendly UAT runbook (HTML that prints cleanly to PDF), see:
+
+- `uat/UAT.html`
 
 ## Local development
 
